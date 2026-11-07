@@ -116,7 +116,8 @@ body.light-mode {
 .rd-dock {
   position: absolute; right: 84px; bottom: 10px; z-index: 825;
   display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
-  max-width: min(560px, calc(100% - 120px)); pointer-events: none;
+  /* Kept narrow so it tucks into the sea south-east of Otago instead of shrinking the map fit. */
+  max-width: min(270px, calc(100% - 120px)); pointer-events: none;
 }
 .rd-dock > * { pointer-events: auto; }
 .rd-dock > [hidden] { display: none !important; }
@@ -127,7 +128,8 @@ body.light-mode {
 body.rd-tv .rd-dock { right: 12px; }
 
 /* ---------- pinned electorates ---------- */
-.rd-pins { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.rd-pins { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 100%; }
+.rd-pin-open b { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
 .rd-pin-chip {
   display: inline-flex; align-items: stretch; padding: 0 3px 0 0;
   background: var(--rd-panel-bg); color: var(--rd-panel-fg); border: 1px solid var(--rd-panel-line);
@@ -150,7 +152,7 @@ body.rd-tv .rd-dock { right: 12px; }
   color: var(--rd-panel-muted); font: 400 14px/1 system-ui, sans-serif;
 }
 .rd-pin-x:hover { background: rgba(148, 163, 184, .2); color: var(--rd-panel-fg); }
-@media (max-width: 900px) { .rd-pins { justify-content: flex-start; } }
+@media (max-width: 900px) { .rd-pins { align-items: flex-start; } }
 
 /* pin toggle in the electorate panel header */
 .rd-pin-btn {
@@ -166,7 +168,7 @@ body.rd-tv .rd-dock { right: 12px; }
 
 /* ---------- margin legend ---------- */
 .rd-legend {
-  position: static;
+  position: static; flex-wrap: wrap; justify-content: flex-end; row-gap: 5px; max-width: 100%;
   display: flex; align-items: center; gap: 4px; padding: 5px 9px;
   background: var(--rd-panel-bg); color: var(--rd-panel-fg); border: 1px solid var(--rd-panel-line);
   font: 600 11px Montserrat, system-ui, sans-serif; white-space: nowrap;

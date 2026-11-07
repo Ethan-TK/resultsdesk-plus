@@ -59,8 +59,10 @@ html, body { overscroll-behavior: none; }
   #mapDetailPanel .map-national-results > .map-national-total-row { flex: none; }
   #mapDetailPanel .map-national-results > .candidate-results-body {
     flex: 0 1 auto; min-height: 0; max-height: var(--rd-party-body-h, none);
-    overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+    overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: none; /* Firefox: still scrolls, no visible bar */
   }
+  #mapDetailPanel .map-national-results > .candidate-results-body::-webkit-scrollbar { display: none; } /* Chrome/Edge */
   #mapDetailPanel .map-national-results .candidate-result-show-more-row:has([aria-expanded="true"]) { display: none !important; }
 }
 

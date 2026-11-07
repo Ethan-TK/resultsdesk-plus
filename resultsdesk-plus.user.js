@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      1.7.1
+// @version      1.7.2
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -769,13 +769,28 @@ function rdInstallCore() {
   // panel. Used for the page's starting view, the site's own Reset, TV mode and our
   // "Reset view" button, which shows only when the map isn't at this view.
   // ---------------------------------------------------------------------------
-  const NZ_BOUNDS = [[-47.35, 166.3], [-34.3, 178.65]];
+  const NZ_BOUNDS = [[-47.35, 166.3], [-34.1, 178.65]]; // incl. Three Kings Islands; excl. Chathams
   const startupUntil = Date.now() + 3500; // the site positions the map a few times while loading
   const visibleRect = node => {
     if (!node) return null;
     const r = node.getBoundingClientRect();
     return r.width > 0 && r.height > 0 && getComputedStyle(node).display !== 'none' && getComputedStyle(node).visibility !== 'hidden' ? r : null;
   };
+  // Coastline points (sampled from the electorate shapes) so the key/pins box only blocks the
+  // map where it would actually cover land, not a whole strip across the bottom.
+  let landPts = null;
+  function landPoints() {
+    if (landPts && landPts.length) return landPts;
+    const pts = [];
+    const walk = ll => { if (Array.isArray(ll)) ll.forEach(walk); else if (ll && Number.isFinite(ll.lat)) pts.push(ll); };
+    try { geoJsonLayer.eachLayer(l => { if (l.getLatLngs) walk(l.getLatLngs()); }); } catch { /* not drawn */ }
+    const nz = L.latLngBounds(NZ_BOUNDS).pad(0.02); // drops the Chatham Islands
+    const inNz = pts.filter(p => nz.contains(p));
+    const step = Math.max(1, Math.floor(inNz.length / 4000));
+    landPts = inNz.filter((_, i) => i % step === 0);
+    return landPts;
+  }
+  let bestCache = { key: '', view: null };
   function bestView() {
     try {
       const m = map.getContainer().getBoundingClientRect();
@@ -786,18 +801,41 @@ function rdInstallCore() {
       const rail = visibleRect($('#mapMagicWallControlsRail'));
       if (rail && rail.right > m.left + m.width / 2) right = Math.max(right, m.right - rail.left + gap);
       if (left + right > m.width - 120) { left = gap; right = gap; } // too narrow to dodge them; just fit
-      // Keep clear of the stack of key / pinned chips / overhang notice too (bottom, or top on stacked layouts).
-      let top = gap, bottom = gap;
       const dock = visibleRect($('#rdDock'));
-      if (dock && dock.height > 0) {
-        if (dock.top > m.top + m.height / 2) bottom = Math.max(bottom, m.bottom - dock.top + gap);
-        else top = Math.max(top, dock.bottom - m.top + gap);
+      const box = dock ? { l: dock.left - m.left - gap, t: dock.top - m.top - gap, r: dock.right - m.left + gap, b: dock.bottom - m.top + gap } : null;
+
+      const key = [m.width, m.height, left, right, box && [box.l, box.t, box.r, box.b].map(Math.round).join(',')].join('|');
+      if (bestCache.key === key && bestCache.view) return bestCache.view;
+
+      const bounds = L.latLngBounds(NZ_BOUNDS);
+      const padTL = L.point(left, gap), padBR = L.point(right, gap);
+      const fit = map._getBoundsCenterZoom(bounds, { paddingTopLeft: padTL, paddingBottomRight: padBR });
+      if (!fit || !Number.isFinite(fit.zoom)) return null;
+      let view = fit;
+      const pts = box ? landPoints() : [];
+      if (box && pts.length) {
+        // Same centring Leaflet uses for a padded fit, at a given zoom.
+        const centerAt = z => {
+          const sw = map.project(bounds.getSouthWest(), z), ne = map.project(bounds.getNorthEast(), z);
+          return map.unproject(sw.add(ne).divideBy(2).add(padBR.subtract(padTL).divideBy(2)), z);
+        };
+        const size = map.getSize();
+        const covers = (c, z) => {
+          const o = map.project(c, z).subtract(size.divideBy(2));
+          for (const p of pts) {
+            const q = map.project(p, z).subtract(o);
+            if (q.x > box.l && q.x < box.r && q.y > box.t && q.y < box.b) return true;
+          }
+          return false;
+        };
+        const snap = map.options.zoomSnap || 0.05;
+        for (let z = fit.zoom; z >= fit.zoom - 3; z = Math.round((z - snap) / snap) * snap) {
+          const c = z === fit.zoom ? fit.center : centerAt(z);
+          if (!covers(c, z)) { view = { center: c, zoom: z }; break; }
+        }
       }
-      if (top + bottom > m.height - 120) { top = gap; bottom = gap; }
-      const t = map._getBoundsCenterZoom(L.latLngBounds(NZ_BOUNDS), {
-        paddingTopLeft: [left, top], paddingBottomRight: [right, bottom],
-      });
-      return t && Number.isFinite(t.zoom) ? t : null;
+      if (!box || pts.length) bestCache = { key, view }; // don't cache a fit made before the shapes loaded
+      return view;
     } catch { return null; }
   }
   function atDefaultView() {
@@ -1049,7 +1087,7 @@ function rdInstallCore() {
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
-      console.log('[ResultsDesk Plus] active v' + '1.7.1' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      console.log('[ResultsDesk Plus] active v' + '1.7.2' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 900) {
       setTimeout(whenReady, 100);
     } else {
@@ -1065,7 +1103,7 @@ const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
 if (!sandboxed) {
   rdPlusMain();
 } else {
-  console.log('[ResultsDesk Plus] v1.7.1 in Firefox sandbox, moving into the page…');
+  console.log('[ResultsDesk Plus] v1.7.2 in Firefox sandbox, moving into the page…');
   const s = document.createElement('script');
   s.textContent = '(' + rdPlusMain.toString() + ')();';
   (document.head || document.documentElement).appendChild(s);

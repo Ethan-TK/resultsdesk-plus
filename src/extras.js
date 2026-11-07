@@ -276,6 +276,7 @@
       dock.appendChild(b);
     }
     document.querySelectorAll('.rd-coal-btn').forEach(b => { b.classList.toggle('active', coalOpen); b.setAttribute('aria-pressed', String(coalOpen)); });
+    tvCoalitionButton();
   }
 
   function toggleCoalition(force) {
@@ -285,6 +286,23 @@
     const p = $('#rdCoalition');
     if (p) p.hidden = !coalOpen;
     renderSeatsUi();
+    // In TV mode the tracker sits top-left over the map: re-fit NZ around it.
+    if (document.body.classList.contains('rd-tv')) setTimeout(() => { try { applyBestView(false); } catch { /* ignore */ } }, 50);
+  }
+
+  // TV mode: "Coalition" button in the top-left corner of the map (shares the tracker's open state).
+  function tvCoalitionButton() {
+    const wrap = $('#mapWrap');
+    if (!wrap) return;
+    let b = wrap.querySelector(':scope > .rd-tv-coal-toggle');
+    if (!b) {
+      b = el('button', 'rd-tv-coal-toggle', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6M12 14.5c1.1-.3 2.5-.5 4-.5 3.3 0 6 2.7 6 6"/></svg><span>Coalition</span>');
+      b.type = 'button';
+      b.title = 'Show or hide the coalition tracker';
+      b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); toggleCoalition(); });
+      wrap.appendChild(b);
+    }
+    if (b.getAttribute('aria-pressed') !== String(coalOpen)) b.setAttribute('aria-pressed', String(coalOpen));
   }
 
   function renderSeatsUi() {
@@ -596,6 +614,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['1.8.3', ['TV mode: Coalition button in the top-left corner shows the coalition tracker there.']],
     ['1.8.2', ['The Help button is now this changelog.']],
     ['1.8.1', ['TV mode fills the screen.', 'Reset view leaves a little more room around New Zealand.']],
     ['1.8.0', ['Better light mode: tinted sea, clearer grey land before results, readable highlights, and TV mode follows the theme.', 'Pinned electorates stack vertically.']],
@@ -719,6 +738,8 @@
       // The key and overhang notice are obstacles (each on its own). Pinned chips are ignored:
       // they may sit over land rather than shrink the map.
       const items = $('#rdDock') ? [...$('#rdDock').querySelectorAll(':scope > .rd-overhang, :scope > .rd-legend')] : [];
+      // TV mode: the top-left Coalition button and tracker sit over the map, so keep land clear of them.
+      if (document.body.classList.contains('rd-tv')) items.push($('#mapWrap > .rd-tv-coal-toggle'), $('#rdCoalition'));
       const boxes = items.map(visibleRect).filter(Boolean)
         .map(d => ({ l: d.left - m.left - gap, t: d.top - m.top - gap, r: d.right - m.left + gap, b: d.bottom - m.top + gap }));
       const box = boxes.length ? boxes : null;

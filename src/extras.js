@@ -494,7 +494,7 @@
   // and the site's own scrollIntoView calls would nudge it. CSS blocks wheel/touch
   // scrolling; this snaps any programmatic scroll back to the top.
   // ---------------------------------------------------------------------------
-  const pinPage = () => window.matchMedia('(min-width: 1181px)').matches && document.body?.dataset.dashboardView === 'map';
+  const pinPage = () => window.matchMedia('(min-width: 901px)').matches && document.body?.dataset.dashboardView === 'map';
   window.addEventListener('scroll', () => { if (pinPage() && (window.scrollY || window.scrollX)) window.scrollTo(0, 0); }, { passive: true });
 
   // ---------------------------------------------------------------------------

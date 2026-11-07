@@ -343,3 +343,6 @@ body.light-mode .rd-cl-head p { color: #55657d; }
 body.light-mode .rd-cl-close { border-color: rgba(15, 29, 51, .2); }
 body.light-mode .rd-cl-ver { border-bottom-color: rgba(15, 29, 51, .08); }
 body.light-mode .rd-cl-ver h3 { color: #b45309; }
+
+/* ---------- no city labels on the map ---------- */
+.leaflet-marker-icon.poi-label-icon, .poi-label-icon .map-place-label, .poi-label-icon .poi-marker-dot { display: none !important; }

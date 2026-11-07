@@ -29,6 +29,7 @@ Your userscript manager will pick up new versions automatically.
 - **Quieter footer.** The panel footer just shows when results last changed (no "next refresh in" countdown).
 - **Hide the top bar.** A small arrow under the header hides it for more map; click it again to bring it back (remembered between visits).
 - **Key follows the leader.** The margin key takes the colour of the party currently leading (most seats, then most votes), blue until results arrive.
+- **Changelog.** The Help button is replaced by a Changelog listing what each version changed.
 - Removes the Buy me a coffee and Contact header links.
 
 ## Firefox

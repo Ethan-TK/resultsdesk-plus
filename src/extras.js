@@ -592,6 +592,71 @@
     btn.click();
   }
 
+  // ---------------------------------------------------------------------------
+  // 15. Changelog replaces the Help button in the header.
+  // ---------------------------------------------------------------------------
+  const CHANGELOG = [
+    ['1.8.2', ['The Help button is now this changelog.']],
+    ['1.8.1', ['TV mode fills the screen.', 'Reset view leaves a little more room around New Zealand.']],
+    ['1.8.0', ['Better light mode: tinted sea, clearer grey land before results, readable highlights, and TV mode follows the theme.', 'Pinned electorates stack vertically.']],
+    ['1.7.7', ['Map key back on one line.', 'Removed the old house-icon Reset button (Reset view replaces it).']],
+    ['1.7.6', ['The map fit ignores pinned electorates, so they no longer shrink the map.']],
+    ['1.7.4', ['New Zealand fits bigger on small laptop screens.']],
+    ['1.7.3', ['The best-fit view now holds on slower machines.', 'Hiding or showing the top bar re-fits the map.']],
+    ['1.7.2', ['The map uses the space beside the key.']],
+    ['1.7.1', ['The starting view fits all of New Zealand as large as possible without anything covering it.']],
+    ['1.7.0', ['Reset view button at the bottom of the map controls.', 'Removed the "next refresh in" countdown.']],
+    ['1.6.0', ['The New Zealand panel lists every party in a scrolling list, with no "Show more" button.']],
+    ['1.5.0', ['Pin electorates from their panel; pinned seats show above the map key.', 'Edge to edge on every tab.']],
+    ['1.4.0', ['Works on Firefox.']],
+    ['1.3.0', ['Full-window map with no footer.', 'Arrow to hide and show the top bar.', 'Map key takes the leading party’s colour.']],
+    ['1.2.0', ['ResultsDeskPlus branding.', 'The page no longer shifts up and down when scrolling.']],
+    ['1.1.0', ['Sitting MP ("Held by") shown in each electorate panel.']],
+    ['1.0.0', ['Faster live updates, about a second after results are published.', 'Striped electorates that changed party, margin shading, last-changed badges.', 'Coalition tracker, overhang notice and TV mode.']],
+  ];
+  function openChangelog() {
+    let modal = $('#rdChangelog');
+    if (!modal) {
+      modal = el('div', 'rd-cl-backdrop');
+      modal.id = 'rdChangelog';
+      modal.innerHTML = `
+        <section class="rd-cl" role="dialog" aria-modal="true" aria-labelledby="rdClTitle">
+          <header class="rd-cl-head">
+            <div><h2 id="rdClTitle">Changelog</h2><p>ResultsDeskPlus v${esc(CHANGELOG[0][0])}</p></div>
+            <button type="button" class="rd-cl-close" aria-label="Close changelog">×</button>
+          </header>
+          <div class="rd-cl-body">${CHANGELOG.map(([v, items]) => `
+            <article class="rd-cl-ver"><h3>v${esc(v)}</h3><ul>${items.map(t => `<li>${esc(t)}</li>`).join('')}</ul></article>`).join('')}
+          </div>
+        </section>`;
+      modal.addEventListener('click', e => { if (e.target === modal || e.target.closest('.rd-cl-close')) closeChangelog(); });
+      document.body.appendChild(modal);
+    }
+    modal.hidden = false;
+    modal.dataset.returnFocus = '1';
+    openChangelog.returnTo = document.activeElement;
+    modal.querySelector('.rd-cl-close').focus();
+  }
+  function closeChangelog() {
+    const modal = $('#rdChangelog');
+    if (!modal || modal.hidden) return;
+    modal.hidden = true;
+    try { openChangelog.returnTo?.focus?.(); } catch { /* ignore */ }
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#rdChangelog') && !$('#rdChangelog').hidden) { e.stopPropagation(); closeChangelog(); } }, true);
+  function changelogButton() {
+    const help = $('header .nav-btn[data-nav="help"]');
+    if (!help) return;
+    if (help.style.display !== 'none') help.style.setProperty('display', 'none', 'important'); // site CSS outranks a stylesheet rule
+    if ($('#rdChangelogBtn')) return;
+    const b = el('button', 'nav-btn rd-cl-btn', '<svg class="utility-nav-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l2.5 2.5"/><path d="M3.05 11a9 9 0 1 1 .5 4"/><path d="M3 4v5h5"/></svg><span>Changelog</span>');
+    b.id = 'rdChangelogBtn';
+    b.type = 'button';
+    b.setAttribute('aria-haspopup', 'dialog');
+    b.addEventListener('click', openChangelog);
+    help.insertAdjacentElement('beforebegin', b);
+  }
+
   // Repaint the map when switching light/dark (light mode uses a different "no result" grey).
   let wasLight = document.body.classList.contains('light-mode');
   new MutationObserver(() => {
@@ -944,6 +1009,7 @@
     try { seatRows = Array.isArray(lastSeatSummaryRows) ? lastSeatSummaryRows : []; } catch { /* not yet */ }
     buildLegend();
     tvButton();
+    changelogButton();
     headerToggle();
     updateLayoutVars();
     renderSeatsUi();
@@ -953,7 +1019,7 @@
     renderPins();
     expandPartyList();
     ensureResetViewBtn();
-    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); buildLegend(); decorateHeldBy(); decoratePinButtons(); headerToggle(); expandPartyList(); })
+    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); buildLegend(); decorateHeldBy(); decoratePinButtons(); headerToggle(); expandPartyList(); })
       .observe(document.body, { childList: true, subtree: true });
   }
 

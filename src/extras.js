@@ -590,6 +590,75 @@
     btn.click();
   }
 
+  // ---------------------------------------------------------------------------
+  // 13. No "next refresh in Xs" in the footer (it only adds " · …" when this is non-empty).
+  // ---------------------------------------------------------------------------
+  if (typeof window.formatNextRefreshStatus === 'function') window.formatNextRefreshStatus = () => '';
+
+  // ---------------------------------------------------------------------------
+  // 14. "Reset view" button at the bottom of the map controls. Visible only when the map
+  // isn't at its default view. The default is recorded, not calculated: the view the page
+  // settles on when it loads, updated whenever the site itself resets/refits the map.
+  // ---------------------------------------------------------------------------
+  let defView = null;
+  const startupUntil = Date.now() + 3000; // let the site finish its own initial positioning
+  function recordDefaultView() {
+    try { defView = { center: map.getCenter(), zoom: map.getZoom() }; } catch { /* map not ready */ }
+    updateResetViewBtn();
+  }
+  function atDefaultView() {
+    if (!defView) return true;
+    try {
+      if (Math.abs(map.getZoom() - defView.zoom) > 0.06) return false;
+      const size = map.getSize();
+      const p = map.latLngToContainerPoint(defView.center);
+      return Math.hypot(p.x - size.x / 2, p.y - size.y / 2) < 14;
+    } catch { return true; }
+  }
+  function updateResetViewBtn() {
+    const b = $('.rd-reset-view-btn');
+    if (b) b.hidden = atDefaultView();
+  }
+  for (const name of ['applyDefaultMapView', 'refitCompactMapForViewport']) {
+    const orig = window[name];
+    if (typeof orig === 'function') {
+      window[name] = function () { const r = orig.apply(this, arguments); setTimeout(recordDefaultView, 60); return r; };
+    }
+  }
+  function resetView() {
+    if (!defView) return;
+    const { center, zoom } = defView;
+    try {
+      map.flyTo(center, zoom, { duration: 0.6 });
+      if (typeof setActiveRegionButton === 'function') setActiveRegionButton(null);
+    } catch { /* ignore */ }
+    // Make sure we land exactly, even if the animation is interrupted or the tab is in the background.
+    setTimeout(() => { if (!atDefaultView()) try { map.setView(center, zoom, { animate: false }); } catch { /* ignore */ } }, 900);
+  }
+  let resetViewWired = false;
+  function ensureResetViewBtn() {
+    const dock = $('#mapMagicWallControlsRail .map-icon-dock');
+    if (!dock) return;
+    let b = dock.querySelector('.rd-reset-view-btn');
+    if (!b) {
+      b = el('button', 'map-icon-button rd-reset-view-btn');
+      b.type = 'button';
+      b.dataset.mapIcon = 'rdResetView';
+      b.title = 'Reset map position and zoom';
+      b.setAttribute('aria-label', b.title);
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><circle cx="12" cy="12" r="2.2"/></svg><span>Reset view</span>';
+      b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); resetView(); });
+      b.hidden = true;
+    }
+    if (dock.lastElementChild !== b) dock.appendChild(b); // always the bottom control
+    if (!resetViewWired && typeof map !== 'undefined' && map?.on) {
+      resetViewWired = true;
+      recordDefaultView();
+      map.on('moveend zoomend resize', () => { if (Date.now() < startupUntil) recordDefaultView(); else updateResetViewBtn(); });
+    }
+    updateResetViewBtn();
+  }
+
   document.addEventListener('click', e => {
     const x = e.target.closest?.('.rd-pin-x');
     if (x) { e.preventDefault(); togglePin(x.dataset.unpin); return; }
@@ -747,7 +816,8 @@
     decoratePinButtons();
     renderPins();
     expandPartyList();
-    new MutationObserver(() => { ensureCoalitionUi(); tvButton(); buildLegend(); decorateHeldBy(); decoratePinButtons(); headerToggle(); expandPartyList(); })
+    ensureResetViewBtn();
+    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); buildLegend(); decorateHeldBy(); decoratePinButtons(); headerToggle(); expandPartyList(); })
       .observe(document.body, { childList: true, subtree: true });
   }
 

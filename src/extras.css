@@ -185,6 +185,7 @@ body.rd-tv .rd-dock { right: 12px; }
 
 /* ---------- coalition tracker ---------- */
 .rd-coal-btn.active { color: #fde047 !important; }
+.map-icon-button.rd-reset-view-btn[hidden] { display: none !important; }
 .rd-coalition {
   position: absolute; top: 12px; right: 84px; z-index: 830; width: 330px; max-height: calc(100% - 70px); overflow: auto;
   padding: 12px; background: var(--rd-panel-bg); color: var(--rd-panel-fg); border: 1px solid var(--rd-panel-line);

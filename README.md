@@ -24,6 +24,8 @@ Your userscript manager will pick up new versions automatically.
 - **TV mode.** Header button or press **T**: full-screen map with big seat tallies, coalition bar and a feed of latest updates, touring regions every 20 seconds. **Esc** exits.
 - **ResultsDeskPlus branding.** Logo, tab title, welcome screen and labels read "ResultsDeskPlus" (the footer's design credit to ResultsDesk.nz is kept).
 - **Full-window map.** On desktop the map runs edge to edge and fills the window, with no side padding or footer, and the page no longer shifts up and down when you scroll.
+- **Reset view.** A button at the bottom of the map controls puts the map back to its starting position and zoom. It only appears once you've moved or zoomed the map, and it doesn't close the panel you have open.
+- **Quieter footer.** The panel footer just shows when results last changed (no "next refresh in" countdown).
 - **Hide the top bar.** A small arrow under the header hides it for more map; click it again to bring it back (remembered between visits).
 - **Key follows the leader.** The margin key takes the colour of the party currently leading (most seats, then most votes), blue until results arrive.
 - Removes the Buy me a coffee and Contact header links.

@@ -558,6 +558,10 @@
     const leadVotes = Number(r && (pv ? r.party_vote_leader_votes : r.leader_votes)) || 0;
     const margin = Number(r && (pv ? r.party_vote_margin_votes : r.margin_votes)) || 0;
     const has = lead && lead !== 'Unknown' && leadVotes > 0;
+    // Leader's share of the votes counted so far (fraction in the data; fall back to votes / total).
+    const shareRaw = Number(r && (pv ? r.party_vote_leader_pct : r.leader_pct));
+    const totalVotes = Number(r && (pv ? r.party_vote_total_votes : r.total_votes)) || 0;
+    const share = Number.isFinite(shareRaw) && shareRaw > 0 ? shareRaw * 100 : (totalVotes > 0 ? leadVotes / totalVotes * 100 : null);
     const total = Number(r?.voting_places_total) || 0;
     const pct = total > 0 ? (Number(r.voting_places_counted) || 0) / total * 100 : (r ? Number(r.reporting_pct) || 0 : null);
     let flip = false;
@@ -566,8 +570,8 @@
       <button type="button" class="rd-pin-open" data-pin="${esc(name)}" title="Open ${esc(name)}">
         <span class="rd-pin-bar${flip ? ' is-flip' : ''}" style="--c:${has ? partyColor(lead) : '#64748b'}"></span>
         <b>${esc(name)}</b>
-        <span class="rd-pin-lead">${has ? `${esc(partyLabel(lead))} +${fmt(margin)}` : 'no votes yet'}</span>
-        ${pct == null ? '' : `<span class="rd-pin-pct">${pct.toFixed(0)}%</span>`}
+        <span class="rd-pin-lead">${has ? `${esc(partyLabel(lead))}${share != null ? ` <span class="rd-pin-share">${share.toFixed(0)}%</span>` : ''} · +${fmt(margin)}` : 'no votes yet'}</span>
+        ${pct == null ? '' : `<span class="rd-pin-pct">${pct.toFixed(0)}% counted</span>`}
       </button>
       <button type="button" class="rd-pin-x" data-unpin="${esc(name)}" title="Unpin" aria-label="Unpin ${esc(name)}">×</button>
     </div>`;
@@ -683,6 +687,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['1.9.3', ['Pinned electorates show the leader’s share of the vote, and the counted % is labelled "counted".']],
     ['1.9.2', ['ACT is magenta instead of yellow.']],
     ['1.9.1', ['Removed the city labels from the map.']],
     ['1.9.0', ['Every party uses its own colour.', 'The party list reaches further down, and rows shrink so every party on 4% or more fits without scrolling.', 'On short screens the bloc builder under the totals is hidden to make room.']],

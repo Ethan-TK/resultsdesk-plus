@@ -346,3 +346,4 @@ body.light-mode .rd-cl-ver h3 { color: #b45309; }
 
 /* ---------- no city labels on the map ---------- */
 .leaflet-marker-icon.poi-label-icon, .poi-label-icon .map-place-label, .poi-label-icon .poi-marker-dot { display: none !important; }
+.rd-pin-chip .rd-pin-share { color: var(--rd-panel-fg); font-weight: 800; }

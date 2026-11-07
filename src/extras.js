@@ -434,7 +434,9 @@
     document.querySelectorAll('.popup-header').forEach(h => {
       const name = h.querySelector('h3')?.textContent.trim();
       let tag = h.querySelector('.rd-held');
-      if (!live || !name) { tag?.remove(); return; }
+      // Only electorate panels (not the "New Zealand" national summary, which uses the same header).
+      const isElectorate = name && (HELD_BY[name] || liveByName(name));
+      if (!live || !isElectorate) { tag?.remove(); return; }
       if (tag && tag.dataset.for === name) return;
       if (!tag) {
         tag = el('div', 'rd-held');
@@ -445,6 +447,64 @@
       tag.innerHTML = heldByHtml(name);
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // 7. Rebrand: "ResultsDesk" -> BRAND in visible text, tab title, labels and logo.
+  // The footer design credit to ResultsDesk.nz is left as-is.
+  // ---------------------------------------------------------------------------
+  const BRAND = 'ResultsDeskPlus';
+  const BRAND_RE = /ResultsDesk(?!Plus)/g;
+
+  function rebrandText(root) {
+    if (!root) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: n => (BRAND_RE.lastIndex = 0, BRAND_RE.test(n.nodeValue) && !n.parentElement?.closest('script, style, .dashboard-footer'))
+        ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
+    });
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const n of nodes) n.nodeValue = n.nodeValue.replace(BRAND_RE, BRAND);
+  }
+  function rebrandAttrs(root) {
+    (root.querySelectorAll ? root.querySelectorAll('[aria-label*="ResultsDesk"], [title*="ResultsDesk"], [alt*="ResultsDesk"], [placeholder*="ResultsDesk"]') : [])
+      .forEach(e => ['aria-label', 'title', 'alt', 'placeholder'].forEach(a => {
+        const v = e.getAttribute(a);
+        if (v && BRAND_RE.test((BRAND_RE.lastIndex = 0, v))) e.setAttribute(a, v.replace(BRAND_RE, BRAND));
+      }));
+  }
+  function rebrandTitle() {
+    if (/ResultsDesk(?!Plus)/.test(document.title)) document.title = document.title.replace(BRAND_RE, BRAND);
+  }
+  function rebrandLogo() {
+    const a = $('.app-brand');
+    if (!a || a.querySelector('.rd-brand-text')) return;
+    // The site's CSS forces the logo <img> visible with !important, so hide it the same way.
+    a.querySelectorAll('img').forEach(img => img.style.setProperty('display', 'none', 'important'));
+    a.insertAdjacentHTML('beforeend', '<span class="rd-brand-text" aria-hidden="true">RESULTSDESK<b>PLUS</b>.NZ</span>');
+  }
+  function rebrandAll(root = document.body) {
+    rebrandText(root);
+    rebrandAttrs(document);
+    rebrandTitle();
+    rebrandLogo();
+  }
+  // ---------------------------------------------------------------------------
+  // 8. Keep the desktop map view still: the page is a few px taller than the window,
+  // and the site's own scrollIntoView calls would nudge it. CSS blocks wheel/touch
+  // scrolling; this snaps any programmatic scroll back to the top.
+  // ---------------------------------------------------------------------------
+  const pinPage = () => window.matchMedia('(min-width: 1101px)').matches && document.body?.dataset.dashboardView === 'map';
+  window.addEventListener('scroll', () => { if (pinPage() && (window.scrollY || window.scrollX)) window.scrollTo(0, 0); }, { passive: true });
+
+  rebrandAll();
+  new MutationObserver(muts => {
+    for (const m of muts) {
+      if (m.type === 'characterData') { if (BRAND_RE.test((BRAND_RE.lastIndex = 0, m.target.nodeValue))) rebrandText(m.target.parentElement); }
+      else m.addedNodes.forEach(n => { if (n.nodeType === 1) { rebrandText(n); rebrandAttrs(n); } else if (n.nodeType === 3 && n.parentElement) rebrandText(n.parentElement); });
+    }
+    rebrandTitle();
+    rebrandLogo();
+  }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
 
   // ---------------------------------------------------------------------------
   // Hook into the app

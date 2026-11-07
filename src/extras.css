@@ -1,5 +1,30 @@
 /* ResultsDesk clone extras */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
 .app-support-link, .app-contact-link { display: none !important; }
+
+/* ---------- rebrand logo ---------- */
+.app-brand .rd-brand-text {
+  font: 400 34px/1 'Bebas Neue', 'Oswald', Impact, sans-serif; letter-spacing: .01em;
+  color: #fff; white-space: nowrap; display: inline-block; transform: translateY(2px);
+}
+.app-brand .rd-brand-text b { font-weight: 400; color: #fde047; }
+body.light-mode .app-brand .rd-brand-text { color: #0f1d33; }
+body.light-mode .app-brand .rd-brand-text b { color: #b45309; }
+@media (max-width: 660px) { .app-brand .rd-brand-text { font-size: 26px; } }
+
+/* ---------- no page bounce on the desktop map view ---------- */
+html, body { overscroll-behavior: none; }
+/* The page is a few px taller than the window; `clip` (unlike `hidden`) also stops the
+   site's own scrollIntoView calls from nudging it, so the map view never moves. */
+@media (min-width: 1101px) {
+  html:has(body.dashboard-body[data-dashboard-view="map"]) { overflow: clip !important; height: 100% !important; }
+  body.dashboard-body[data-dashboard-view="map"] { overflow: clip !important; height: 100vh !important; min-height: 0 !important; }
+}
+
+/* ---------- smaller footer ---------- */
+body.dashboard-body .dashboard-shell { padding-bottom: 2px !important; margin-bottom: 2px !important; }
+body.dashboard-body .dashboard-footer { margin-top: 3px !important; line-height: 1.1 !important; opacity: .6; }
+body.dashboard-body .dashboard-footer-inner { font-size: 8.5px !important; }
 
 :root {
   --rd-panel-bg: rgba(7, 20, 38, .94);

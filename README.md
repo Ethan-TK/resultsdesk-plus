@@ -20,6 +20,8 @@ Your userscript manager will pick up new versions automatically.
 - **Coalition tracker.** A **Coalition** button in the map controls opens a panel with National · ACT · NZ First vs Labour · Green · Te Pāti Māori, the majority line, and seats over time.
 - **Overhang notice.** Appears when a party wins more electorates than its party vote earns, with the new Parliament size and majority.
 - **TV mode.** Header button or press **T**: full-screen map with big seat tallies, coalition bar and a feed of latest updates, touring regions every 20 seconds. **Esc** exits.
+- **ResultsDeskPlus branding.** Logo, tab title, welcome screen and labels read "ResultsDeskPlus" (the footer's design credit to ResultsDesk.nz is kept).
+- **Steady page.** On the desktop map view the page no longer shifts up and down when you scroll; the footer is slimmer.
 - Removes the Buy me a coffee and Contact header links.
 
 ## Notes

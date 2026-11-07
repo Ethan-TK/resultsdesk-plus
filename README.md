@@ -19,9 +19,9 @@ Your userscript manager will pick up new versions automatically.
 - **Sitting MP.** The electorate panel shows who holds the seat ("Held by …") on 2026 live results. Based on 2023 winners plus the Port Waikato (2023) and Tāmaki Makaurau (2025) by-elections; the party shown is the one they were elected for. New 2026 electorates show "New electorate".
 - **Scroll all parties.** The New Zealand panel lists every party in a scrolling list inside the same-size box, so there's no "Show more" button to press; the totals row and footer stay in view.
 - **Pin electorates.** Click the faint pin beside an electorate's name in its panel. Pinned seats sit as small chips above the map key (leading party colour, striped if flipped, margin and % counted); click a chip to open it, × to unpin. Up to 6, remembered between visits.
-- **Coalition tracker.** A **Coalition** button in the map controls opens a panel with National · ACT · NZ First vs Labour · Green · Te Pāti Māori, the majority line, and seats over time.
+- **Coalition tracker.** A **Coalition** button in the map controls opens a panel with National · ACT · NZ First, OPP (Opportunity, in its cyan) and Labour · Green · Te Pāti Māori, the majority line, and seats over time.
 - **Overhang notice.** Appears when a party wins more electorates than its party vote earns, with the new Parliament size and majority.
-- **TV mode.** Header button or press **T**: full-screen map with big seat tallies, coalition bar and a feed of latest updates, touring regions every 20 seconds. A **Coalition** button in the top-left corner shows the coalition tracker there. **Esc** exits.
+- **TV mode.** Header button or press **T**: full-screen map with big seat tallies, coalition bar and a feed of latest updates, touring regions every 20 seconds. **Esc** exits.
 - **ResultsDeskPlus branding.** Logo, tab title, welcome screen and labels read "ResultsDeskPlus" (the footer's design credit to ResultsDesk.nz is kept).
 - **Full-window map.** On desktop the map runs edge to edge and fills the window, with no side padding or footer, and the page no longer shifts up and down when you scroll.
 - **Best-fit map view.** The starting view (and Reset) fits all of New Zealand as large as possible in the visible map area, clear of the results panel, the controls and the key.

@@ -243,8 +243,8 @@ body.rd-tv.rd-tv.rd-tv #mapWrap {
   z-index: 9000 !important; margin: 0 !important; background: #050b16; display: block !important;
 }
 body.rd-tv.rd-tv.rd-tv #map { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; display: block !important; }
-body.rd-tv.rd-tv.rd-tv #mapWrap > :not(#map):not(.rd-dock):not(.map-stage-texture):not(#featurePopup):not(.rd-coalition):not(.rd-tv-coal-toggle) { display: none !important; }
-body.rd-tv #rdOverhang { display: none !important; }
+body.rd-tv.rd-tv.rd-tv #mapWrap > :not(#map):not(.rd-dock):not(.map-stage-texture):not(#featurePopup) { display: none !important; }
+body.rd-tv .rd-coalition, body.rd-tv #rdOverhang { display: none !important; }
 body.rd-tv .rd-legend { font-size: 13px; }
 body.rd-tv .rd-pin-chip { font-size: 14px; }
 body.rd-tv .rd-badge { font-size: 13px; }
@@ -343,18 +343,3 @@ body.light-mode .rd-cl-head p { color: #55657d; }
 body.light-mode .rd-cl-close { border-color: rgba(15, 29, 51, .2); }
 body.light-mode .rd-cl-ver { border-bottom-color: rgba(15, 29, 51, .08); }
 body.light-mode .rd-cl-ver h3 { color: #b45309; }
-
-/* ---------- TV mode: coalition tracker, top-left ---------- */
-.rd-tv-coal-toggle { display: none; }
-body.rd-tv .rd-tv-coal-toggle {
-  position: absolute; top: 14px; left: 14px; z-index: 840;
-  display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; cursor: pointer;
-  background: var(--rd-panel-bg); color: var(--rd-panel-fg); border: 1px solid var(--rd-panel-line);
-  font: 700 13px/1 Montserrat, system-ui, sans-serif; box-shadow: 0 4px 14px rgba(0, 0, 0, .3);
-}
-body.rd-tv .rd-tv-coal-toggle svg { width: 16px; height: 16px; }
-body.rd-tv .rd-tv-coal-toggle:hover, body.rd-tv .rd-tv-coal-toggle:focus-visible { border-color: var(--rd-panel-muted); }
-body.rd-tv .rd-tv-coal-toggle[aria-pressed="true"] { color: #fde047; }
-body.light-mode.rd-tv .rd-tv-coal-toggle[aria-pressed="true"] { color: #b45309; }
-body.light-mode.rd-tv .rd-tv-coal-toggle { box-shadow: 0 4px 14px rgba(15, 29, 51, .14); }
-body.rd-tv .rd-coalition { top: 58px; left: 14px; right: auto; width: 340px; max-height: calc(100% - 80px); font-size: 13.5px; }

@@ -12,8 +12,17 @@
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = n => Number(n || 0).toLocaleString('en-NZ');
   const ds = () => { try { return currentDataset; } catch { return ''; } };
+  // Opportunity: the party's own cyan everywhere (the site shows it purple), and "OPP" in our panels.
+  const OPP_CYAN = '#00B9BC';
+  const isOppParty = p => /OPPORTUNIT/i.test(String(p || ''));
+  if (typeof window.getPartyColor === 'function' && !window.getPartyColor.__rdOpp) {
+    const origColor = window.getPartyColor;
+    window.getPartyColor = function (p) { return isOppParty(p) ? OPP_CYAN : origColor.apply(this, arguments); };
+    window.getPartyColor.__rdOpp = true;
+  }
   const partyColor = p => { try { return getPartyColor(p); } catch { return '#94a3b8'; } };
   const partyLabel = p => {
+    if (isOppParty(p)) return 'OPP';
     try { if (typeof getDashboardPartyLabel === 'function') return getDashboardPartyLabel(p); } catch { /* fall through */ }
     return String(p || '').replace(/ PARTY$/, '');
   };
@@ -172,10 +181,17 @@
   // ---------------------------------------------------------------------------
   // 3. Coalition tracker + 4. overhang notice
   // ---------------------------------------------------------------------------
+  // Order matters: Opportunity (OPP) sits between the two main blocs in the list and seat bar.
+  // OPP's cyan is the party's own brand colour (opportunity.org.nz primary #00B9BC).
+  const OPP_COLOR = OPP_CYAN;
+  const isOpp = isOppParty;
   const BLOCS = [
     { key: 'right', name: 'National · ACT · NZ First', test: p => /^NATIONAL|^ACT\b|NZ FIRST|NEW ZEALAND FIRST/i.test(p), color: '#2f5fd0' },
+    { key: 'opp', name: 'OPP', test: isOpp, color: OPP_COLOR, middle: true },
     { key: 'left', name: 'Labour · Green · Te Pāti Māori', test: p => /^LABOUR|^GREEN|M[AĀ]ORI/i.test(p), color: '#d0342c' },
   ];
+  const blocByKey = (st, k) => st.blocs.find(b => b.key === k) || { seats: 0 };
+  const mainBlocs = st => st.blocs.filter(b => !b.middle);
   let seatRows = [];
   let coalOpen = store.get('rd-coalition-open', false);
   const histKey = () => `rd-coal-hist-${ds()}`;
@@ -200,9 +216,9 @@
   function recordHistory(st) {
     if (!st.total) return [];
     const hist = store.get(histKey(), []);
-    const snap = { t: Date.now(), r: st.blocs[0].seats, l: st.blocs[1].seats, o: st.othersSeats, n: st.total };
+    const snap = { t: Date.now(), r: blocByKey(st, 'right').seats, p: blocByKey(st, 'opp').seats, l: blocByKey(st, 'left').seats, o: st.othersSeats, n: st.total };
     const last = hist[hist.length - 1];
-    if (!last || last.r !== snap.r || last.l !== snap.l || last.o !== snap.o || last.n !== snap.n) {
+    if (!last || last.r !== snap.r || last.p !== snap.p || last.l !== snap.l || last.o !== snap.o || last.n !== snap.n) {
       hist.push(snap);
       while (hist.length > 400) hist.shift();
       store.set(histKey(), hist);
@@ -216,10 +232,12 @@
     const t0 = hist[0].t, t1 = hist[hist.length - 1].t || t0 + 1;
     const x = t => ((t - t0) / Math.max(1, t1 - t0)) * W;
     const y = v => H - (v / maxN) * H;
-    const line = (k, c) => `<polyline fill="none" stroke="${c}" stroke-width="2" points="${hist.map(h => `${x(h.t).toFixed(1)},${y(h[k]).toFixed(1)}`).join(' ')}"/>`;
+    const line = (k, c) => `<polyline fill="none" stroke="${c}" stroke-width="2" points="${hist.map(h => `${x(h.t).toFixed(1)},${y(h[k] || 0).toFixed(1)}`).join(' ')}"/>`;
+    const col = k => BLOCS.find(b => b.key === k).color;
+    const hasOpp = hist.some(h => h.p > 0);
     return `<svg class="rd-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
       <line x1="0" x2="${W}" y1="${y(majority)}" y2="${y(majority)}" stroke="currentColor" stroke-dasharray="4 3" opacity=".5"/>
-      ${line('r', BLOCS[0].color)}${line('l', BLOCS[1].color)}</svg>`;
+      ${line('r', col('right'))}${hasOpp ? line('p', col('opp')) : ''}${line('l', col('left'))}</svg>`;
   }
 
   function blocBarHtml(st) {
@@ -231,18 +249,20 @@
   }
 
   function verdict(st) {
-    const win = st.blocs.find(b => b.seats >= st.majority);
+    const win = mainBlocs(st).find(b => b.seats >= st.majority);
     if (win) return `<b style="color:${win.color}">${esc(win.name)}</b> has a majority: ${win.seats} of ${st.total}`;
-    const best = [...st.blocs].sort((a, b) => b.seats - a.seats)[0];
+    const best = [...mainBlocs(st)].sort((a, b) => b.seats - a.seats)[0];
     if (!best || !best.seats) return 'Waiting for results';
-    return `No majority yet: ${esc(best.name)} is ${st.majority - best.seats} short` + (st.othersSeats ? ` (others hold ${st.othersSeats})` : '');
+    const opp = blocByKey(st, 'opp').seats;
+    const extra = [opp ? `OPP holds ${opp}` : '', st.othersSeats ? `others hold ${st.othersSeats}` : ''].filter(Boolean).join(', ');
+    return `No majority yet: ${esc(best.name)} is ${st.majority - best.seats} short` + (extra ? ` (${extra})` : '');
   }
 
   function coalitionHtml(st, hist) {
     const blocs = st.blocs.map(b => `
       <div class="rd-bloc">
         <div class="rd-bloc-head"><span class="rd-dot" style="background:${b.color}"></span>${esc(b.name)}<strong>${b.seats}</strong></div>
-        <div class="rd-chips">${b.members.map(m => `<span class="rd-chip" style="--c:${partyColor(m.party)}">${esc(partyLabel(m.party))} ${m.seats}</span>`).join('') || '<small>—</small>'}</div>
+        ${b.middle ? '' : `<div class="rd-chips">${b.members.map(m => `<span class="rd-chip" style="--c:${partyColor(m.party)}">${esc(partyLabel(m.party))} ${m.seats}</span>`).join('') || '<small>—</small>'}</div>`}
       </div>`).join('');
     const others = st.others.length ? `<div class="rd-bloc"><div class="rd-bloc-head"><span class="rd-dot" style="background:#64748b"></span>Others<strong>${st.othersSeats}</strong></div>
       <div class="rd-chips">${st.others.map(m => `<span class="rd-chip" style="--c:${partyColor(m.party)}">${esc(partyLabel(m.party))} ${m.seats}</span>`).join('')}</div></div>` : '';
@@ -286,7 +306,6 @@
       dock.appendChild(b);
     }
     document.querySelectorAll('.rd-coal-btn').forEach(b => { b.classList.toggle('active', coalOpen); b.setAttribute('aria-pressed', String(coalOpen)); });
-    tvCoalitionButton();
   }
 
   function toggleCoalition(force) {
@@ -296,23 +315,6 @@
     const p = $('#rdCoalition');
     if (p) p.hidden = !coalOpen;
     renderSeatsUi();
-    // In TV mode the tracker sits top-left over the map: re-fit NZ around it.
-    if (document.body.classList.contains('rd-tv')) setTimeout(() => { try { applyBestView(false); } catch { /* ignore */ } }, 50);
-  }
-
-  // TV mode: "Coalition" button in the top-left corner of the map (shares the tracker's open state).
-  function tvCoalitionButton() {
-    const wrap = $('#mapWrap');
-    if (!wrap) return;
-    let b = wrap.querySelector(':scope > .rd-tv-coal-toggle');
-    if (!b) {
-      b = el('button', 'rd-tv-coal-toggle', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6M12 14.5c1.1-.3 2.5-.5 4-.5 3.3 0 6 2.7 6 6"/></svg><span>Coalition</span>');
-      b.type = 'button';
-      b.title = 'Show or hide the coalition tracker';
-      b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); toggleCoalition(); });
-      wrap.appendChild(b);
-    }
-    if (b.getAttribute('aria-pressed') !== String(coalOpen)) b.setAttribute('aria-pressed', String(coalOpen));
   }
 
   function renderSeatsUi() {
@@ -624,6 +626,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['1.8.5', ['Coalition tracker: OPP sits between the two blocs, in Opportunity’s cyan.', 'Opportunity shows in cyan across the site.', 'Removed the Coalition button from TV mode.']],
     ['1.8.4', ['Removed the update badges from the map (they covered it once results started).']],
     ['1.8.3', ['TV mode: Coalition button in the top-left corner shows the coalition tracker there.']],
     ['1.8.2', ['The Help button is now this changelog.']],
@@ -749,8 +752,6 @@
       // The key and overhang notice are obstacles (each on its own). Pinned chips are ignored:
       // they may sit over land rather than shrink the map.
       const items = $('#rdDock') ? [...$('#rdDock').querySelectorAll(':scope > .rd-overhang, :scope > .rd-legend')] : [];
-      // TV mode: the top-left Coalition button and tracker sit over the map, so keep land clear of them.
-      if (document.body.classList.contains('rd-tv')) items.push($('#mapWrap > .rd-tv-coal-toggle'), $('#rdCoalition'));
       const boxes = items.map(visibleRect).filter(Boolean)
         .map(d => ({ l: d.left - m.left - gap, t: d.top - m.top - gap, r: d.right - m.left + gap, b: d.bottom - m.top + gap }));
       const box = boxes.length ? boxes : null;

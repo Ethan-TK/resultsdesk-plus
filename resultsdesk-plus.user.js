@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      1.8.3
+// @version      1.8.4
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -249,8 +249,18 @@ function rdInstallCore() {
     renderPins();
   }
 
+  // Map badges are switched off (they piled up and covered the map once results started).
+  // Changes are still tracked for TV mode's "Latest updates" list.
+  const SHOW_MAP_BADGES = false;
   function renderBadges() {
     if (typeof map === 'undefined' || !map || typeof L === 'undefined') return;
+    if (!SHOW_MAP_BADGES) {
+      // Drop expired entries so the TV list stays current, and clear anything already drawn.
+      const now = Date.now();
+      for (const [code, c] of changes) if (now - c.at > BADGE_TTL) changes.delete(code);
+      if (badgeLayer) { badgeLayer.clearLayers(); badgeLayer.remove(); badgeLayer = null; }
+      return;
+    }
     if (!badgeLayer) badgeLayer = L.layerGroup().addTo(map);
     badgeLayer.clearLayers();
     const now = Date.now();
@@ -788,6 +798,7 @@ function rdInstallCore() {
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['1.8.4', ['Removed the update badges from the map (they covered it once results started).']],
     ['1.8.3', ['TV mode: Coalition button in the top-left corner shows the coalition tracker there.']],
     ['1.8.2', ['The Help button is now this changelog.']],
     ['1.8.1', ['TV mode fills the screen.', 'Reset view leaves a little more room around New Zealand.']],
@@ -1234,7 +1245,7 @@ function rdInstallCore() {
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
-      console.log('[ResultsDesk Plus] active v' + '1.8.3' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      console.log('[ResultsDesk Plus] active v' + '1.8.4' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 900) {
       setTimeout(whenReady, 100);
     } else {
@@ -1250,7 +1261,7 @@ const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
 if (!sandboxed) {
   rdPlusMain();
 } else {
-  console.log('[ResultsDesk Plus] v1.8.3 in Firefox sandbox, moving into the page…');
+  console.log('[ResultsDesk Plus] v1.8.4 in Firefox sandbox, moving into the page…');
   const s = document.createElement('script');
   s.textContent = '(' + rdPlusMain.toString() + ')();';
   (document.head || document.documentElement).appendChild(s);

@@ -75,8 +75,18 @@
     renderPins();
   }
 
+  // Map badges are switched off (they piled up and covered the map once results started).
+  // Changes are still tracked for TV mode's "Latest updates" list.
+  const SHOW_MAP_BADGES = false;
   function renderBadges() {
     if (typeof map === 'undefined' || !map || typeof L === 'undefined') return;
+    if (!SHOW_MAP_BADGES) {
+      // Drop expired entries so the TV list stays current, and clear anything already drawn.
+      const now = Date.now();
+      for (const [code, c] of changes) if (now - c.at > BADGE_TTL) changes.delete(code);
+      if (badgeLayer) { badgeLayer.clearLayers(); badgeLayer.remove(); badgeLayer = null; }
+      return;
+    }
     if (!badgeLayer) badgeLayer = L.layerGroup().addTo(map);
     badgeLayer.clearLayers();
     const now = Date.now();
@@ -614,6 +624,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['1.8.4', ['Removed the update badges from the map (they covered it once results started).']],
     ['1.8.3', ['TV mode: Coalition button in the top-left corner shows the coalition tracker there.']],
     ['1.8.2', ['The Help button is now this changelog.']],
     ['1.8.1', ['TV mode fills the screen.', 'Reset view leaves a little more room around New Zealand.']],

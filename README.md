@@ -15,7 +15,7 @@ Your userscript manager will pick up new versions automatically.
 - **Faster live updates.** Checks for new data about once a second and redraws as soon as ResultsDesk publishes it, instead of waiting up to 30–60 seconds. Pauses while the tab is hidden.
 - **Striped flipped seats.** Electorates where the leader differs from the last election's winner get diagonal stripes over the new party's colour.
 - **Margin shading.** Close races are paler, safe seats solid. A legend on the map switches it on and off.
-- **Last-changed badges.** Electorates whose count just updated get a tag with the new votes and how long ago; lead changes are highlighted.
+
 - **Sitting MP.** The electorate panel shows who holds the seat ("Held by …") on 2026 live results. Based on 2023 winners plus the Port Waikato (2023) and Tāmaki Makaurau (2025) by-elections; the party shown is the one they were elected for. New 2026 electorates show "New electorate".
 - **Scroll all parties.** The New Zealand panel lists every party in a scrolling list inside the same-size box, so there's no "Show more" button to press; the totals row and footer stay in view.
 - **Pin electorates.** Click the faint pin beside an electorate's name in its panel. Pinned seats sit as small chips above the map key (leading party colour, striped if flipped, margin and % counted); click a chip to open it, × to unpin. Up to 6, remembered between visits.

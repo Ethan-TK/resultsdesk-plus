@@ -128,7 +128,7 @@ body.light-mode {
 body.rd-tv .rd-dock { right: 12px; }
 
 /* ---------- pinned electorates ---------- */
-.rd-pins { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.rd-pins { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .rd-pin-chip {
   display: inline-flex; align-items: stretch; padding: 0 3px 0 0;
   background: var(--rd-panel-bg); color: var(--rd-panel-fg); border: 1px solid var(--rd-panel-line);
@@ -151,7 +151,7 @@ body.rd-tv .rd-dock { right: 12px; }
   color: var(--rd-panel-muted); font: 400 14px/1 system-ui, sans-serif;
 }
 .rd-pin-x:hover { background: rgba(148, 163, 184, .2); color: var(--rd-panel-fg); }
-@media (max-width: 900px) { .rd-pins { justify-content: flex-start; } }
+@media (max-width: 900px) { .rd-pins { align-items: flex-start; } }
 
 /* pin toggle in the electorate panel header */
 .rd-pin-btn {
@@ -285,3 +285,26 @@ body.rd-tv .rd-tv-panel {
   body.rd-tv #mapWrap { inset: 0 0 46vh 0 !important; }
   body.rd-tv .rd-tv-panel { top: 54vh; width: 100%; border-left: 0; overflow: auto; }
 }
+
+/* ---------- light mode ---------- */
+/* Tint the sea so pale land (no results yet) stands out from it. */
+body.light-mode #map.leaflet-container,
+body.light-mode .map-wrap { background: #edf2f7 !important; }
+/* Yellow accents are unreadable on white; use a deep amber instead. */
+body.light-mode .rd-coal-btn.active { color: #b45309 !important; }
+body.light-mode .rd-pin-btn.is-pinned { color: #d97706; }
+body.light-mode .rd-badge { border-color: rgba(15, 29, 51, .35); box-shadow: 0 2px 6px rgba(15, 29, 51, .2); }
+body.light-mode .rd-pin-chip, body.light-mode .rd-legend, body.light-mode .rd-coalition { box-shadow: 0 4px 14px rgba(15, 29, 51, .12); }
+body.light-mode .rd-bloc-bar { background: rgba(15, 29, 51, .08); }
+body.light-mode .rd-chip, body.light-mode .rd-held-party { background: rgba(15, 29, 51, .06); }
+/* TV mode follows the theme too. */
+body.light-mode.rd-tv.rd-tv.rd-tv #mapWrap { background: #edf2f7 !important; }
+body.light-mode.rd-tv .rd-tv-panel { background: #ffffff; color: #0f1d33; border-left-color: rgba(15, 29, 51, .14); }
+body.light-mode .rd-tv-sub, body.light-mode .rd-tv-coal-head, body.light-mode .rd-tv-ticker-label,
+body.light-mode .rd-ticker-item small { color: #55657d; }
+body.light-mode .rd-ticker-item span:not(.rd-dot) { color: #334155; }
+body.light-mode .rd-ticker-item.is-lead-change b { color: #be123c; }
+body.light-mode .rd-tv-bar { background: rgba(15, 29, 51, .08); }
+body.light-mode .rd-tv-coal, body.light-mode .rd-tv-ticker-label { border-top-color: rgba(15, 29, 51, .12); }
+body.light-mode .rd-tv-coal .rd-bloc-bar i { background: #0f1d33; }
+body.light-mode .rd-tv-actions button { border-color: rgba(15, 29, 51, .25); }

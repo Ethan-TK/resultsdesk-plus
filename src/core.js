@@ -101,7 +101,13 @@ function rdInstallCore() {
   }
   function restyle(f, st) {
     if (!st || typeof st.fillColor !== 'string') return st;
-    const op = marginOpacity(f?.properties?.live);
+    const live = f?.properties?.live;
+    // Light mode: electorates with no result yet get a mid grey so the country stands out from the sea.
+    if (document.body?.classList.contains('light-mode')) {
+      const lead = (() => { try { return currentViewMode === 'partyvote' ? live?.party_vote_leader_party : live?.leader_party; } catch { return live?.leader_party; } })();
+      if (!lead || lead === 'Unknown') return { ...st, fillColor: '#aeb8c5', fillOpacity: 0.9 };
+    }
+    const op = marginOpacity(live);
     let out = st;
     if (op != null) out = { ...out, fillOpacity: op };
     if (isFlipped(f)) out = { ...out, fillColor: hatchPattern(st.fillColor), fillOpacity: Math.max(out.fillOpacity ?? 0.8, 0.6) };

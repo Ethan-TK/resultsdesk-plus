@@ -589,6 +589,15 @@
     btn.click();
   }
 
+  // Repaint the map when switching light/dark (light mode uses a different "no result" grey).
+  let wasLight = document.body.classList.contains('light-mode');
+  new MutationObserver(() => {
+    const isLight = document.body.classList.contains('light-mode');
+    if (isLight === wasLight) return;
+    wasLight = isLight;
+    try { geoJsonLayer.setStyle(featureStyle); updateSelectedHighlight(); } catch { /* map not ready */ }
+  }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
   // ---------------------------------------------------------------------------
   // 13. No "next refresh in Xs" in the footer (it only adds " · …" when this is non-empty).
   // ---------------------------------------------------------------------------

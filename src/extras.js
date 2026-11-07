@@ -575,8 +575,7 @@
       <div class="rd-spec-legend">
         <span><i class="is-counted"></i>Counted tonight <b>${fmt(s.cast)}</b> (${(100 - sharePct).toFixed(0)}%)</span>
         <span><i class="is-left"></i>Specials <b>${fmt(s.left)}</b> (${sharePct.toFixed(0)}%)</span>
-      </div>
-      <div class="rd-spec-plain">Votes from overseas, late enrolments and people voting outside their electorate. They're counted for the <b>official result on ${OFFICIAL_RESULTS_LABEL}</b> and can change close seats and the seat split.${s.turnoutAll ? ` Turnout: <b>${s.turnoutNow.toFixed(1)}%</b> so far, about <b>${s.turnoutAll.toFixed(1)}%</b> with specials.` : ''}</div>`;
+      </div>`;
   }
   // Per electorate there's no figure, so estimate from the national ratio (it varies a lot:
   // city and student seats usually have far more specials than average).
@@ -781,6 +780,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.0.2', ['Special votes box is shorter (explanation text removed) so the party list has more room.']],
     ['2.0.1', ['Special votes are explained in plain words: how many are left, counted vs still to count, what they are, and when they are counted. Close electorates say how small the lead is.']],
     ['2.0.0', ['Special votes: the New Zealand panel shows how many are still to count, their share of all votes, turnout with them included and when the official count is due; electorate panels show an estimate for that seat and flag leads they could overturn. TV mode shows the total too.']],
     ['1.9.4', ['TV mode: clicking an electorate shows its votes and candidates; × or Esc closes it.']],

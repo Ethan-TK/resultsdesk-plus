@@ -567,6 +567,29 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // 12. National party list shows every party, scrolling inside the same-size box.
+  // Measure the list while collapsed (8 parties + "Show N more" row), then expand it with
+  // the site's own button; CSS caps the list at the measured height and hides that button.
+  // ---------------------------------------------------------------------------
+  let partyExpandAt = 0;
+  const savedPartyH = store.get('rd-party-body-h', 0);
+  if (savedPartyH) document.documentElement.style.setProperty('--rd-party-body-h', `${savedPartyH}px`);
+  function expandPartyList() {
+    if (!window.matchMedia('(min-width: 901px)').matches) return;
+    const list = $('#mapDetailPanel .map-national-results');
+    const btn = list?.querySelector('[data-result-expander="map-national"]');
+    if (!btn || btn.getAttribute('aria-expanded') === 'true' || Date.now() - partyExpandAt < 800) return;
+    const body = list.querySelector('.candidate-results-body');
+    const h = Math.round(body?.getBoundingClientRect().height || 0);
+    if (h > 0) {
+      document.documentElement.style.setProperty('--rd-party-body-h', `${h}px`);
+      store.set('rd-party-body-h', h);
+    }
+    partyExpandAt = Date.now();
+    btn.click();
+  }
+
   document.addEventListener('click', e => {
     const x = e.target.closest?.('.rd-pin-x');
     if (x) { e.preventDefault(); togglePin(x.dataset.unpin); return; }
@@ -723,7 +746,8 @@
     decorateHeldBy();
     decoratePinButtons();
     renderPins();
-    new MutationObserver(() => { ensureCoalitionUi(); tvButton(); buildLegend(); decorateHeldBy(); decoratePinButtons(); headerToggle(); })
+    expandPartyList();
+    new MutationObserver(() => { ensureCoalitionUi(); tvButton(); buildLegend(); decorateHeldBy(); decoratePinButtons(); headerToggle(); expandPartyList(); })
       .observe(document.body, { childList: true, subtree: true });
   }
 

@@ -44,6 +44,26 @@ html, body { overscroll-behavior: none; }
   }
 }
 
+/* ---------- national party list: all parties, scrolling inside the same-size box ----------
+   extras.js measures the list while collapsed (--rd-party-body-h) and then expands it, so the
+   box keeps its size; the column headings, totals row and footer stay fixed. On short windows
+   the list shrinks instead, so the footer is never pushed off screen. */
+@media (min-width: 901px) {
+  #mapDetailPanel.has-national-summary { display: flex !important; flex-direction: column; overflow: hidden !important; }
+  #mapDetailPanel.has-national-summary > #mapDetailContent { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  #mapDetailPanel .map-national-summary { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  #mapDetailPanel .map-national-summary > .popup-header,
+  #mapDetailPanel .map-national-summary > .popup-footer { flex: none; }
+  #mapDetailPanel .map-national-results { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  #mapDetailPanel .map-national-results > .candidate-results-head,
+  #mapDetailPanel .map-national-results > .map-national-total-row { flex: none; }
+  #mapDetailPanel .map-national-results > .candidate-results-body {
+    flex: 0 1 auto; min-height: 0; max-height: var(--rd-party-body-h, none);
+    overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  }
+  #mapDetailPanel .map-national-results .candidate-result-show-more-row:has([aria-expanded="true"]) { display: none !important; }
+}
+
 /* ---------- top bar show/hide arrow ---------- */
 body.rd-hide-header .app-header { display: none !important; }
 .rd-header-toggle {

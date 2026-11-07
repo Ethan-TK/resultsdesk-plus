@@ -602,7 +602,13 @@
   // "Reset view" button, which shows only when the map isn't at this view.
   // ---------------------------------------------------------------------------
   const NZ_BOUNDS = [[-47.35, 166.3], [-34.1, 178.65]]; // incl. Three Kings Islands; excl. Chathams
-  const startupUntil = Date.now() + 3500; // the site positions the map a few times while loading
+  // While the page loads, the site moves the map itself (sometimes late, on slow machines or
+  // connections). Until the user touches the map or its controls, correct any such move back to
+  // the best fit, for up to 20 s. After a user action, their view is never overridden.
+  const startupUntil = Date.now() + 20000;
+  let userMoved = false, lastUserAt = 0;
+  const markUserMove = () => { userMoved = true; lastUserAt = Date.now(); };
+  const forceDefault = () => !userMoved && Date.now() < startupUntil;
   const visibleRect = node => {
     if (!node) return null;
     const r = node.getBoundingClientRect();
@@ -690,7 +696,8 @@
     const t = bestView();
     if (!t) return false;
     try {
-      if (animate) {
+      map.stop(); // cancel any half-finished animation first
+      if (animate && !document.hidden) {
         map.flyTo(t.center, t.zoom, { duration: 0.6 });
         // Land exactly even if the animation is interrupted or the tab is in the background.
         setTimeout(() => { if (!atDefaultView()) { const u = bestView(); if (u) map.setView(u.center, u.zoom, { animate: false }); } }, 900);
@@ -711,6 +718,13 @@
     };
   }
   const resetView = () => applyBestView(true);
+  // Anything the user does to the map or its controls counts as "they've taken over".
+  ['mousedown', 'wheel', 'touchstart', 'keydown', 'dblclick'].forEach(type =>
+    document.addEventListener(type, e => {
+      if (e.target.closest?.('#map, #mapMagicWallControlsRail, .region-btn, .rd-pin-chip, #mapDetailPanel, .map-data-view')) {
+        if (!e.target.closest('.rd-reset-view-btn')) markUserMove();
+      }
+    }, { capture: true, passive: true }));
   let resetViewWired = false;
   function ensureResetViewBtn() {
     const dock = $('#mapMagicWallControlsRail .map-icon-dock');
@@ -732,11 +746,16 @@
       // Starting view: best fit, re-applied while the site is still positioning the map on load.
       setTimeout(() => applyBestView(false), 300);
       map.on('moveend', () => {
-        if (Date.now() < startupUntil && !atDefaultView()) applyBestView(false);
+        if (forceDefault() && !atDefaultView()) applyBestView(false);
         else updateResetViewBtn();
       });
-      // Window resized while at the default view: keep it at the (new) default.
-      map.on('resize', () => { if (wasAtDefault) setTimeout(() => applyBestView(false), 0); else updateResetViewBtn(); });
+      // Window resized (or top bar hidden) while at the default view: keep it at the new default.
+      map.on('resize', () => { if (wasAtDefault || forceDefault()) setTimeout(() => applyBestView(false), 0); else updateResetViewBtn(); });
+      // The panel or key changing size also changes the best fit; follow it while still at default.
+      setInterval(() => {
+        const busy = map._animatingZoom || map._panAnim?._inProgress || map.dragging?._draggable?._moving || Date.now() - lastUserAt < 2000;
+        if (!busy && (wasAtDefault || forceDefault()) && !atDefaultView()) applyBestView(false);
+      }, 1500);
     }
     updateResetViewBtn();
   }
@@ -818,6 +837,9 @@
     layoutTimer = setTimeout(measureLayout, 150);
   }
   function setHeaderHidden(hide) {
+    // If the map is at its default view, re-fit after the map changes height.
+    let keepDefault = false;
+    try { keepDefault = atDefaultView() || forceDefault(); } catch { /* map not ready */ }
     headerHidden = hide;
     store.set('rd-header-hidden', hide);
     document.body.classList.toggle('rd-hide-header', hide);
@@ -828,6 +850,7 @@
       b.setAttribute('aria-expanded', String(!hide));
     }
     updateLayoutVars();
+    if (keepDefault) setTimeout(() => { measureLayout(); applyBestView(false); }, 200);
   }
   function headerToggle() {
     if ($('#rdHeaderToggle') || !$('.app-header')) return;

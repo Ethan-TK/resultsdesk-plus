@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      1.3.1
+// @version      1.4.0
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -21,8 +21,17 @@
 
 // Unofficial add-on. Not affiliated with ResultsDesk. Built from https://github.com/Ethan-TK/resultsdesk-plus/tree/main/src
 
-(() => {
-  'use strict';
+(function () {
+'use strict';
+
+// Everything runs inside rdPlusMain, which must execute in the page itself (it hooks the
+// site's own functions and variables). Chrome's Tampermonkey runs it there directly.
+// Firefox's Tampermonkey may run it in an isolated sandbox instead, where the site's code is
+// invisible; in that case we move it into the page with a <script> element. That has to
+// happen before the site's <meta> CSP is parsed, which @run-at document-start allows.
+function rdPlusMain() {
+  if (document.documentElement.dataset.rdPlus) return; // already running
+  document.documentElement.dataset.rdPlus = 'loaded';
 
   console.log('[ResultsDesk Plus] loaded, waiting for the site…');
 
@@ -774,11 +783,38 @@ function rdInstallCore() {
       addStyles();
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
-      console.log('[ResultsDesk Plus] active v' + '1.3.1' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      document.documentElement.dataset.rdPlus = 'active';
+      console.log('[ResultsDesk Plus] active v' + '1.4.0' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 900) {
       setTimeout(whenReady, 100);
     } else {
       console.warn('[ResultsDesk Plus] app globals not found — site may have changed');
     }
   })();
+}
+
+// Firefox content-script sandboxes expose window.wrappedJSObject; the real page does not.
+const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
+  (typeof unsafeWindow !== 'undefined' && unsafeWindow !== window);
+
+if (!sandboxed) {
+  rdPlusMain();
+} else {
+  console.log('[ResultsDesk Plus] v1.4.0 in Firefox sandbox, moving into the page…');
+  const s = document.createElement('script');
+  s.textContent = '(' + rdPlusMain.toString() + ')();';
+  (document.head || document.documentElement).appendChild(s);
+  s.remove();
+  // Inline scripts run synchronously on insertion, so if the marker isn't set now, the
+  // site's CSP blocked it (Tampermonkey started us too late). Fall back to the sandbox so
+  // at least the styling still applies, and say how to fix it.
+  if (!document.documentElement.dataset.rdPlus) {
+    console.warn('[ResultsDesk Plus] Firefox blocked the script from entering the page because Tampermonkey started it ' +
+      "after the site's security policy loaded. Only the styling will work. Fix: Tampermonkey > Dashboard > Settings > " +
+      'Config mode: Advanced, then under Experimental set Inject Mode: Instant, save, and reload resultsdesk.nz.');
+    rdPlusMain();
+  } else {
+    console.log('[ResultsDesk Plus] moved into the page OK');
+  }
+}
 })();

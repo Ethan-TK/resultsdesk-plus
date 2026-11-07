@@ -26,6 +26,10 @@ Your userscript manager will pick up new versions automatically.
 - **Key follows the leader.** The margin key takes the colour of the party currently leading (most seats, then most votes), blue until results arrive.
 - Removes the Buy me a coffee and Contact header links.
 
+## Firefox
+
+If only the styling changes on Firefox (no TV mode button, no Coalition button), Tampermonkey is starting the script too late and the site's security policy blocks it. The console (F12, filter `Plus`) will say so. Fix: Tampermonkey icon → **Dashboard** → **Settings** → set **Config mode** to **Advanced** → under **Experimental** set **Inject Mode** to **Instant** → **Save**, then reload resultsdesk.nz.
+
 ## Notes
 
 - It hooks into the site's own code, so a ResultsDesk update can break some features. The site itself keeps working. Open the browser console (F12): a working install logs `[ResultsDesk Plus] active`.

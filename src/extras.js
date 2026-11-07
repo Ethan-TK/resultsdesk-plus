@@ -639,10 +639,14 @@
       const rail = visibleRect($('#mapMagicWallControlsRail'));
       if (rail && rail.right > m.left + m.width / 2) right = Math.max(right, m.right - rail.left + gap);
       if (left + right > m.width - 120) { left = gap; right = gap; } // too narrow to dodge them; just fit
-      const dock = visibleRect($('#rdDock'));
-      const box = dock ? { l: dock.left - m.left - gap, t: dock.top - m.top - gap, r: dock.right - m.left + gap, b: dock.bottom - m.top + gap } : null;
+      // Each item in the bottom stack (overhang notice, each pinned chip, key) is its own
+      // obstacle, so a wide row of chips only blocks where the chips actually are.
+      const items = $('#rdDock') ? [...$('#rdDock').querySelectorAll(':scope > .rd-overhang, :scope > .rd-pins > .rd-pin-chip, :scope > .rd-legend')] : [];
+      const boxes = items.map(visibleRect).filter(Boolean)
+        .map(d => ({ l: d.left - m.left - gap, t: d.top - m.top - gap, r: d.right - m.left + gap, b: d.bottom - m.top + gap }));
+      const box = boxes.length ? boxes : null;
 
-      const key = [m.width, m.height, left, right, box && [box.l, box.t, box.r, box.b].map(Math.round).join(',')].join('|');
+      const key = [m.width, m.height, left, right, boxes.map(b => [b.l, b.t, b.r, b.b].map(Math.round).join(',')).join(';')].join('|');
       if (bestCache.key === key && bestCache.view) return bestCache.view;
 
       const bounds = L.latLngBounds(NZ_BOUNDS);
@@ -662,7 +666,7 @@
           const o = map.project(c, z).subtract(size.divideBy(2));
           for (const p of pts) {
             const q = map.project(p, z).subtract(o);
-            if (q.x > box.l && q.x < box.r && q.y > box.t && q.y < box.b) return true;
+            for (const bx of box) if (q.x > bx.l && q.x < bx.r && q.y > bx.t && q.y < bx.b) return true;
           }
           return false;
         };

@@ -461,7 +461,7 @@
     tv.innerHTML = `
       <div class="rd-tv-top">
         <div><div class="rd-tv-title">NZ Election ${esc(String(ds()).match(/\d{4}/)?.[0] || '')}</div>
-        <div class="rd-tv-sub">${pct == null ? '' : `${pct.toFixed(1)}% of voting places counted · `}${spec && !spec.counted ? `~${fmt(spec.left)} special votes still to count · ` : ''}<span class="rd-tv-clock">${new Date().toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })}</span></div></div>
+        <div class="rd-tv-sub">${pct == null ? '' : `${pct.toFixed(1)}% of voting places counted · `}${spec && !spec.counted ? `<b>${fmt(spec.left)} special votes not counted yet</b> (official result ${OFFICIAL_RESULTS_LABEL}) · ` : ''}<span class="rd-tv-clock">${new Date().toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })}</span></div></div>
         <div class="rd-tv-actions"><button data-tv="cycle" type="button">${tvCycle ? 'Auto-tour on' : 'Auto-tour off'}</button><button data-tv="exit" type="button">Exit ✕</button></div>
       </div>
       <div class="rd-tv-seats">${rows || '<div class="rd-tv-sub">Waiting for seat results…</div>'}</div>
@@ -566,11 +566,17 @@
     };
   }
   function specialsNationalHtml(s) {
-    if (s.counted) return `<div class="rd-spec-top"><span class="rd-spec-label">Special votes</span><b>${fmt(s.left)}</b><span class="rd-spec-tag is-done">counted</span></div>
-      <div class="rd-spec-sub">Included in the official results (${OFFICIAL_RESULTS_LABEL}).</div>`;
-    return `<div class="rd-spec-top"><span class="rd-spec-label">Special votes</span><b>~${fmt(s.left)}</b><span class="rd-spec-tag">still to count</span></div>
-      <div class="rd-spec-bar" title="Counted so far vs special votes still to count"><i style="width:${(100 - s.share * 100).toFixed(1)}%"></i></div>
-      <div class="rd-spec-sub">${(s.share * 100).toFixed(1)}% of all votes · ${fmt(s.cast)} counted so far${s.turnoutAll ? ` · turnout ${s.turnoutNow.toFixed(1)}% → ~${s.turnoutAll.toFixed(1)}%` : ''} · official count ${OFFICIAL_RESULTS_LABEL}</div>`;
+    if (s.counted) return `<div class="rd-spec-title">Special votes <span class="rd-spec-tag is-done">Counted</span></div>
+      <div class="rd-spec-plain">All <b>${fmt(s.left)}</b> special votes are included in the official results (${OFFICIAL_RESULTS_LABEL}).</div>`;
+    const sharePct = s.share * 100;
+    return `<div class="rd-spec-title">Special votes <span class="rd-spec-tag">Not counted yet</span></div>
+      <div class="rd-spec-big"><b>${fmt(s.left)}</b> votes still to count <small>(estimate)</small></div>
+      <div class="rd-spec-bar" role="img" aria-label="${(100 - sharePct).toFixed(0)}% of votes counted, ${sharePct.toFixed(0)}% still to count"><i style="width:${(100 - sharePct).toFixed(1)}%"></i></div>
+      <div class="rd-spec-legend">
+        <span><i class="is-counted"></i>Counted tonight <b>${fmt(s.cast)}</b> (${(100 - sharePct).toFixed(0)}%)</span>
+        <span><i class="is-left"></i>Specials <b>${fmt(s.left)}</b> (${sharePct.toFixed(0)}%)</span>
+      </div>
+      <div class="rd-spec-plain">Votes from overseas, late enrolments and people voting outside their electorate. They're counted for the <b>official result on ${OFFICIAL_RESULTS_LABEL}</b> and can change close seats and the seat split.${s.turnoutAll ? ` Turnout: <b>${s.turnoutNow.toFixed(1)}%</b> so far, about <b>${s.turnoutAll.toFixed(1)}%</b> with specials.` : ''}</div>`;
   }
   // Per electorate there's no figure, so estimate from the national ratio (it varies a lot:
   // city and student seats usually have far more specials than average).
@@ -581,7 +587,9 @@
     const est = Math.round(votes * s.ratio / 10) * 10;
     const margin = Number(live?.margin_votes) || 0;
     const close = margin > 0 && margin < est * SPECIALS_SWING;
-    return `<span class="rd-held-label">Specials</span><span class="rd-spec-seat" title="Estimated from the national rate of ${(s.ratio * 100).toFixed(1)} special votes per 100 counted; the real number varies by electorate">~${fmt(est)} still to count</span>${close ? `<span class="rd-spec-tag is-close" title="Lead of ${fmt(margin)} is small next to the special votes still to come">could change</span>` : ''}`;
+    const tip = `Estimate: the national rate of ${(s.ratio * 100).toFixed(1)} special votes per 100 counted. The real number varies by electorate (cities and student areas usually have more).`;
+    return `<span class="rd-held-label">Special votes</span><span class="rd-spec-seat" title="${tip}">about <b>${fmt(est)}</b> still to count</span>
+      ${close ? `<span class="rd-spec-warn">⚠ Lead of only ${fmt(margin)} votes: specials could change who wins</span>` : ''}`;
   }
   function decorateSpecials() {
     const s = specials();
@@ -773,6 +781,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['1.10.1', ['Special votes are explained in plain words: how many are left, counted vs still to count, what they are, and when they are counted. Close electorates say how small the lead is.']],
     ['1.10.0', ['Special votes: the New Zealand panel shows how many are still to count, their share of all votes, turnout with them included and when the official count is due; electorate panels show an estimate for that seat and flag leads they could overturn. TV mode shows the total too.']],
     ['1.9.4', ['TV mode: clicking an electorate shows its votes and candidates; × or Esc closes it.']],
     ['1.9.3', ['Pinned electorates show the leader’s share of the vote, and the counted % is labelled "counted".']],

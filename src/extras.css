@@ -12,19 +12,46 @@ body.light-mode .app-brand .rd-brand-text { color: #0f1d33; }
 body.light-mode .app-brand .rd-brand-text b { color: #b45309; }
 @media (max-width: 660px) { .app-brand .rd-brand-text { font-size: 26px; } }
 
-/* ---------- no page bounce on the desktop map view ---------- */
+/* ---------- no footer ---------- */
+body.dashboard-body .dashboard-footer { display: none !important; }
+
+/* ---------- desktop map view: edge to edge, fills the window, never moves ----------
+   1181px+ is the site's desktop layout (below that it switches to a scrolling layout).
+   `clip` (unlike `hidden`) also stops the site's own scrollIntoView calls nudging the page.
+   --rd-map-top is the map's top edge, kept up to date by extras.js. */
 html, body { overscroll-behavior: none; }
-/* The page is a few px taller than the window; `clip` (unlike `hidden`) also stops the
-   site's own scrollIntoView calls from nudging it, so the map view never moves. */
-@media (min-width: 1101px) {
+@media (min-width: 1181px) {
   html:has(body.dashboard-body[data-dashboard-view="map"]) { overflow: clip !important; height: 100% !important; }
-  body.dashboard-body[data-dashboard-view="map"] { overflow: clip !important; height: 100vh !important; min-height: 0 !important; }
+  html body.dashboard-body[data-dashboard-view="map"] { overflow: clip !important; height: 100vh !important; min-height: 0 !important; }
+  html body.dashboard-body[data-dashboard-view="map"] .dashboard-shell {
+    width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important;
+  }
+  html body.dashboard-body[data-dashboard-view="map"] .app-header-inner {
+    width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 16px !important;
+  }
+  html body.dashboard-body[data-dashboard-view="map"] .dashboard-view-tabs { padding-left: 8px !important; }
+  html body.dashboard-body[data-dashboard-view="map"] .map-card,
+  html body.dashboard-body[data-dashboard-view="map"] .map-card-body,
+  html body.dashboard-body[data-dashboard-view="map"] #mapWrap,
+  html body.dashboard-body[data-dashboard-view="map"] #map {
+    height: calc(100vh - var(--rd-map-top, 81px)) !important; max-height: none !important; min-height: 0 !important;
+    border-radius: 0 !important;
+  }
 }
 
-/* ---------- smaller footer ---------- */
-body.dashboard-body .dashboard-shell { padding-bottom: 2px !important; margin-bottom: 2px !important; }
-body.dashboard-body .dashboard-footer { margin-top: 3px !important; line-height: 1.1 !important; opacity: .6; }
-body.dashboard-body .dashboard-footer-inner { font-size: 8.5px !important; }
+/* ---------- top bar show/hide arrow ---------- */
+body.rd-hide-header .app-header { display: none !important; }
+.rd-header-toggle {
+  position: fixed; left: 50%; top: var(--rd-header-h, 50px); transform: translateX(-50%); z-index: 9500;
+  width: 44px; height: 18px; padding: 0; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid var(--rd-panel-line); border-top: 0; border-radius: 0 0 8px 8px;
+  background: var(--rd-panel-bg); color: var(--rd-panel-fg); opacity: .75;
+}
+.rd-header-toggle:hover, .rd-header-toggle:focus-visible { opacity: 1; }
+.rd-header-toggle svg { width: 14px; height: 14px; transition: transform .2s; }
+body.rd-hide-header .rd-header-toggle { top: 0; }
+body.rd-hide-header .rd-header-toggle svg { transform: rotate(180deg); }
+body.rd-tv .rd-header-toggle { display: none; }
 
 :root {
   --rd-panel-bg: rgba(7, 20, 38, .94);
@@ -66,8 +93,9 @@ body.light-mode {
   font: 600 11px Montserrat, system-ui, sans-serif; white-space: nowrap;
 }
 .rd-legend small { margin-right: 5px; color: var(--rd-panel-muted); font-size: 10.5px; }
-.rd-legend .rd-sw { width: 14px; height: 11px; background: #3b82f6; }
-.rd-legend .rd-sw-hatch { opacity: .9; background: repeating-linear-gradient(-45deg, #3b82f6 0 4px, rgba(10, 14, 24, .75) 4px 7px); }
+/* --rd-key = colour of the currently leading party (set by extras.js); blue until results arrive */
+.rd-legend .rd-sw { width: 14px; height: 11px; background: var(--rd-key, #3b82f6); transition: background .4s; }
+.rd-legend .rd-sw-hatch { opacity: .9; background: repeating-linear-gradient(-45deg, var(--rd-key, #3b82f6) 0 4px, rgba(10, 14, 24, .75) 4px 7px); }
 .rd-legend-toggle {
   margin-right: 6px; padding: 2px 7px; border: 1px solid var(--rd-panel-line); background: transparent;
   color: inherit; font: 800 10.5px Montserrat, system-ui, sans-serif; text-transform: uppercase; cursor: pointer;

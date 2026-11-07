@@ -271,6 +271,7 @@
   function renderSeatsUi() {
     ensureCoalitionUi();
     const st = seatState();
+    updateKeyColour(st);
     const hist = recordHistory(st);
     const p = $('#rdCoalition');
     if (p && !p.hidden) p.innerHTML = st.total ? coalitionHtml(st, hist) : '<div class="rd-coal-head"><strong>Coalition tracker</strong></div><div class="rd-verdict">Waiting for seat results…</div>';
@@ -493,8 +494,68 @@
   // and the site's own scrollIntoView calls would nudge it. CSS blocks wheel/touch
   // scrolling; this snaps any programmatic scroll back to the top.
   // ---------------------------------------------------------------------------
-  const pinPage = () => window.matchMedia('(min-width: 1101px)').matches && document.body?.dataset.dashboardView === 'map';
+  const pinPage = () => window.matchMedia('(min-width: 1181px)').matches && document.body?.dataset.dashboardView === 'map';
   window.addEventListener('scroll', () => { if (pinPage() && (window.scrollY || window.scrollX)) window.scrollTo(0, 0); }, { passive: true });
+
+  // ---------------------------------------------------------------------------
+  // 9. Full-height map + top bar show/hide arrow.
+  // --rd-header-h positions the arrow under the header; --rd-map-top lets CSS size
+  // the map to exactly fill the window below the header and tabs.
+  // ---------------------------------------------------------------------------
+  let headerHidden = store.get('rd-header-hidden', false);
+  let layoutTimer = 0;
+  function measureLayout() {
+    const root = document.documentElement.style;
+    const hdr = $('.app-header');
+    root.setProperty('--rd-header-h', `${headerHidden || !hdr ? 0 : Math.round(hdr.getBoundingClientRect().height)}px`);
+    const tabs = $('.dashboard-view-tabs');
+    if (tabs) root.setProperty('--rd-map-top', `${Math.max(0, Math.round(tabs.getBoundingClientRect().bottom + window.scrollY))}px`);
+    try { map.invalidateSize({ pan: false }); } catch { /* map not ready */ }
+  }
+  // Measure now, then once more after the site's own layout code has reacted.
+  function updateLayoutVars() {
+    measureLayout();
+    clearTimeout(layoutTimer);
+    layoutTimer = setTimeout(measureLayout, 150);
+  }
+  function setHeaderHidden(hide) {
+    headerHidden = hide;
+    store.set('rd-header-hidden', hide);
+    document.body.classList.toggle('rd-hide-header', hide);
+    const b = $('#rdHeaderToggle');
+    if (b) {
+      b.title = hide ? 'Show top bar' : 'Hide top bar';
+      b.setAttribute('aria-label', b.title);
+      b.setAttribute('aria-expanded', String(!hide));
+    }
+    updateLayoutVars();
+  }
+  function headerToggle() {
+    if ($('#rdHeaderToggle') || !$('.app-header')) return;
+    const b = el('button', 'rd-header-toggle', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>');
+    b.id = 'rdHeaderToggle';
+    b.type = 'button';
+    b.addEventListener('click', () => setHeaderHidden(!headerHidden));
+    document.body.appendChild(b);
+    setHeaderHidden(headerHidden);
+  }
+  window.addEventListener('resize', updateLayoutVars);
+
+  // ---------------------------------------------------------------------------
+  // 10. Key colour follows the leading party (most seats, then most votes); blue by default.
+  // ---------------------------------------------------------------------------
+  function updateKeyColour(st) {
+    let lead = st.parties.find(p => p.seats > 0) ? st.parties[0].party : null;
+    if (!lead) {
+      const byVotes = (seatRows || []).filter(r => Number(r.votes) > 0).sort((a, b) => Number(b.votes) - Number(a.votes));
+      lead = byVotes[0]?.party || null;
+    }
+    const c = lead ? partyColor(lead) : null;
+    const root = document.documentElement.style;
+    if (c && typeof c === 'string') root.setProperty('--rd-key', c); else root.removeProperty('--rd-key');
+    const lg = $('#rdLegend');
+    if (lg) lg.title = lead ? `Key colour: ${partyLabel(lead)} (currently leading)` : '';
+  }
 
   rebrandAll();
   new MutationObserver(muts => {
@@ -530,10 +591,12 @@
     try { seatRows = Array.isArray(lastSeatSummaryRows) ? lastSeatSummaryRows : []; } catch { /* not yet */ }
     buildLegend();
     tvButton();
+    headerToggle();
+    updateLayoutVars();
     renderSeatsUi();
     scanChanges();
     decorateHeldBy();
-    new MutationObserver(() => { ensureCoalitionUi(); tvButton(); buildLegend(); decorateHeldBy(); })
+    new MutationObserver(() => { ensureCoalitionUi(); tvButton(); buildLegend(); decorateHeldBy(); headerToggle(); })
       .observe(document.body, { childList: true, subtree: true });
   }
 

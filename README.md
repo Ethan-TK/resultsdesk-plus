@@ -21,7 +21,9 @@ Your userscript manager will pick up new versions automatically.
 - **Overhang notice.** Appears when a party wins more electorates than its party vote earns, with the new Parliament size and majority.
 - **TV mode.** Header button or press **T**: full-screen map with big seat tallies, coalition bar and a feed of latest updates, touring regions every 20 seconds. **Esc** exits.
 - **ResultsDeskPlus branding.** Logo, tab title, welcome screen and labels read "ResultsDeskPlus" (the footer's design credit to ResultsDesk.nz is kept).
-- **Steady page.** On the desktop map view the page no longer shifts up and down when you scroll; the footer is slimmer.
+- **Full-window map.** On desktop the map runs edge to edge and fills the window, with no side padding or footer, and the page no longer shifts up and down when you scroll.
+- **Hide the top bar.** A small arrow under the header hides it for more map; click it again to bring it back (remembered between visits).
+- **Key follows the leader.** The margin key takes the colour of the party currently leading (most seats, then most votes), blue until results arrive.
 - Removes the Buy me a coffee and Contact header links.
 
 ## Notes

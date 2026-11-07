@@ -573,19 +573,18 @@
   // the site's own button; CSS caps the list at the measured height and hides that button.
   // ---------------------------------------------------------------------------
   let partyExpandAt = 0;
-  const savedPartyH = store.get('rd-party-body-h', 0);
-  if (savedPartyH) document.documentElement.style.setProperty('--rd-party-body-h', `${savedPartyH}px`);
+  try { localStorage.removeItem('rd-party-body-h'); } catch { /* old versions saved it; no longer used */ }
   function expandPartyList() {
     if (!window.matchMedia('(min-width: 901px)').matches) return;
     const list = $('#mapDetailPanel .map-national-results');
     const btn = list?.querySelector('[data-result-expander="map-national"]');
     if (!btn || btn.getAttribute('aria-expanded') === 'true' || Date.now() - partyExpandAt < 800) return;
     const body = list.querySelector('.candidate-results-body');
+    // Measure the list's natural collapsed height (uncapped), then cap the expanded list at it.
+    const root = document.documentElement.style;
+    root.removeProperty('--rd-party-body-h');
     const h = Math.round(body?.getBoundingClientRect().height || 0);
-    if (h > 0) {
-      document.documentElement.style.setProperty('--rd-party-body-h', `${h}px`);
-      store.set('rd-party-body-h', h);
-    }
+    if (h > 0) root.setProperty('--rd-party-body-h', `${h}px`);
     partyExpandAt = Date.now();
     btn.click();
   }
@@ -596,45 +595,84 @@
   if (typeof window.formatNextRefreshStatus === 'function') window.formatNextRefreshStatus = () => '';
 
   // ---------------------------------------------------------------------------
-  // 14. "Reset view" button at the bottom of the map controls. Visible only when the map
-  // isn't at its default view. The default is recorded, not calculated: the view the page
-  // settles on when it loads, updated whenever the site itself resets/refits the map.
+  // 14. Default map view = all of New Zealand (Cape Reinga to Stewart Island) as large as
+  // possible in the part of the map you can actually see: clear of the results panel on the
+  // left and the controls on the right, no zoom cap. Recalculated for the current window and
+  // panel. Used for the page's starting view, the site's own Reset, TV mode and our
+  // "Reset view" button, which shows only when the map isn't at this view.
   // ---------------------------------------------------------------------------
-  let defView = null;
-  const startupUntil = Date.now() + 3000; // let the site finish its own initial positioning
-  function recordDefaultView() {
-    try { defView = { center: map.getCenter(), zoom: map.getZoom() }; } catch { /* map not ready */ }
-    updateResetViewBtn();
+  const NZ_BOUNDS = [[-47.35, 166.3], [-34.3, 178.65]];
+  const startupUntil = Date.now() + 3500; // the site positions the map a few times while loading
+  const visibleRect = node => {
+    if (!node) return null;
+    const r = node.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && getComputedStyle(node).display !== 'none' && getComputedStyle(node).visibility !== 'hidden' ? r : null;
+  };
+  function bestView() {
+    try {
+      const m = map.getContainer().getBoundingClientRect();
+      const gap = 10;
+      let left = gap, right = gap;
+      const panel = visibleRect($('#mapDetailPanel'));
+      if (panel && panel.left < m.left + m.width / 2) left = Math.max(left, panel.right - m.left + gap);
+      const rail = visibleRect($('#mapMagicWallControlsRail'));
+      if (rail && rail.right > m.left + m.width / 2) right = Math.max(right, m.right - rail.left + gap);
+      if (left + right > m.width - 120) { left = gap; right = gap; } // too narrow to dodge them; just fit
+      // Keep clear of the stack of key / pinned chips / overhang notice too (bottom, or top on stacked layouts).
+      let top = gap, bottom = gap;
+      const dock = visibleRect($('#rdDock'));
+      if (dock && dock.height > 0) {
+        if (dock.top > m.top + m.height / 2) bottom = Math.max(bottom, m.bottom - dock.top + gap);
+        else top = Math.max(top, dock.bottom - m.top + gap);
+      }
+      if (top + bottom > m.height - 120) { top = gap; bottom = gap; }
+      const t = map._getBoundsCenterZoom(L.latLngBounds(NZ_BOUNDS), {
+        paddingTopLeft: [left, top], paddingBottomRight: [right, bottom],
+      });
+      return t && Number.isFinite(t.zoom) ? t : null;
+    } catch { return null; }
   }
   function atDefaultView() {
-    if (!defView) return true;
+    const t = bestView();
+    if (!t) return true;
     try {
-      if (Math.abs(map.getZoom() - defView.zoom) > 0.06) return false;
+      if (Math.abs(map.getZoom() - t.zoom) > 0.06) return false;
       const size = map.getSize();
-      const p = map.latLngToContainerPoint(defView.center);
+      const p = map.latLngToContainerPoint(t.center);
       return Math.hypot(p.x - size.x / 2, p.y - size.y / 2) < 14;
     } catch { return true; }
   }
+  let wasAtDefault = true;
   function updateResetViewBtn() {
+    wasAtDefault = atDefaultView();
     const b = $('.rd-reset-view-btn');
-    if (b) b.hidden = atDefaultView();
+    if (b) b.hidden = wasAtDefault;
   }
-  for (const name of ['applyDefaultMapView', 'refitCompactMapForViewport']) {
-    const orig = window[name];
-    if (typeof orig === 'function') {
-      window[name] = function () { const r = orig.apply(this, arguments); setTimeout(recordDefaultView, 60); return r; };
-    }
-  }
-  function resetView() {
-    if (!defView) return;
-    const { center, zoom } = defView;
+  function applyBestView(animate) {
+    const t = bestView();
+    if (!t) return false;
     try {
-      map.flyTo(center, zoom, { duration: 0.6 });
+      if (animate) {
+        map.flyTo(t.center, t.zoom, { duration: 0.6 });
+        // Land exactly even if the animation is interrupted or the tab is in the background.
+        setTimeout(() => { if (!atDefaultView()) { const u = bestView(); if (u) map.setView(u.center, u.zoom, { animate: false }); } }, 900);
+      } else {
+        map.setView(t.center, t.zoom, { animate: false });
+      }
       if (typeof setActiveRegionButton === 'function') setActiveRegionButton(null);
-    } catch { /* ignore */ }
-    // Make sure we land exactly, even if the animation is interrupted or the tab is in the background.
-    setTimeout(() => { if (!atDefaultView()) try { map.setView(center, zoom, { animate: false }); } catch { /* ignore */ } }, 900);
+      if (typeof updatePoiVisibility === 'function') setTimeout(() => { try { updatePoiVisibility(); } catch { /* ignore */ } }, 50);
+    } catch { return false; }
+    return true;
   }
+  // The site's own default/reset now uses the same best fit.
+  if (typeof window.applyDefaultMapView === 'function') {
+    const origDefault = window.applyDefaultMapView;
+    window.applyDefaultMapView = function () {
+      try { map.invalidateSize(false); } catch { /* ignore */ }
+      if (!applyBestView(false)) return origDefault.apply(this, arguments);
+    };
+  }
+  const resetView = () => applyBestView(true);
   let resetViewWired = false;
   function ensureResetViewBtn() {
     const dock = $('#mapMagicWallControlsRail .map-icon-dock');
@@ -653,8 +691,14 @@
     if (dock.lastElementChild !== b) dock.appendChild(b); // always the bottom control
     if (!resetViewWired && typeof map !== 'undefined' && map?.on) {
       resetViewWired = true;
-      recordDefaultView();
-      map.on('moveend zoomend resize', () => { if (Date.now() < startupUntil) recordDefaultView(); else updateResetViewBtn(); });
+      // Starting view: best fit, re-applied while the site is still positioning the map on load.
+      setTimeout(() => applyBestView(false), 300);
+      map.on('moveend', () => {
+        if (Date.now() < startupUntil && !atDefaultView()) applyBestView(false);
+        else updateResetViewBtn();
+      });
+      // Window resized while at the default view: keep it at the (new) default.
+      map.on('resize', () => { if (wasAtDefault) setTimeout(() => applyBestView(false), 0); else updateResetViewBtn(); });
     }
     updateResetViewBtn();
   }

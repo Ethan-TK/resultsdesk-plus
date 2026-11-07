@@ -21,7 +21,7 @@
     [/^NATIONAL/i, '#00529F'],
     [/^LABOUR/i, '#D82A20'],
     [/^GREEN/i, '#098137'],
-    [/^ACT\b/i, '#FDE401'],
+    [/^ACT\b/i, '#EE2796'], // ACT's magenta (act.org.nz)
     [/NZ FIRST|NEW ZEALAND FIRST/i, '#000000'],
     [/M[AĀ]ORI/i, '#B2001A'],
     [/OPPORTUNIT/i, OPP_CYAN],
@@ -683,6 +683,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['1.9.2', ['ACT is magenta instead of yellow.']],
     ['1.9.1', ['Removed the city labels from the map.']],
     ['1.9.0', ['Every party uses its own colour.', 'The party list reaches further down, and rows shrink so every party on 4% or more fits without scrolling.', 'On short screens the bloc builder under the totals is hidden to make room.']],
     ['1.8.5', ['Coalition tracker: OPP sits between the two blocs, in Opportunity’s cyan.', 'Opportunity shows in cyan across the site.', 'Removed the Coalition button from TV mode.']],

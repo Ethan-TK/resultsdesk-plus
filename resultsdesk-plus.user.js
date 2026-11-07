@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      1.9.1
+// @version      1.9.2
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -195,7 +195,7 @@ function rdInstallCore() {
     [/^NATIONAL/i, '#00529F'],
     [/^LABOUR/i, '#D82A20'],
     [/^GREEN/i, '#098137'],
-    [/^ACT\b/i, '#FDE401'],
+    [/^ACT\b/i, '#EE2796'], // ACT's magenta (act.org.nz)
     [/NZ FIRST|NEW ZEALAND FIRST/i, '#000000'],
     [/M[AĀ]ORI/i, '#B2001A'],
     [/OPPORTUNIT/i, OPP_CYAN],
@@ -857,6 +857,7 @@ function rdInstallCore() {
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['1.9.2', ['ACT is magenta instead of yellow.']],
     ['1.9.1', ['Removed the city labels from the map.']],
     ['1.9.0', ['Every party uses its own colour.', 'The party list reaches further down, and rows shrink so every party on 4% or more fits without scrolling.', 'On short screens the bloc builder under the totals is hidden to make room.']],
     ['1.8.5', ['Coalition tracker: OPP sits between the two blocs, in Opportunity’s cyan.', 'Opportunity shows in cyan across the site.', 'Removed the Coalition button from TV mode.']],
@@ -1309,7 +1310,7 @@ function rdInstallCore() {
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
-      console.log('[ResultsDesk Plus] active v' + '1.9.1' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      console.log('[ResultsDesk Plus] active v' + '1.9.2' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 900) {
       setTimeout(whenReady, 100);
     } else {
@@ -1325,7 +1326,7 @@ const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
 if (!sandboxed) {
   rdPlusMain();
 } else {
-  console.log('[ResultsDesk Plus] v1.9.1 in Firefox sandbox, moving into the page…');
+  console.log('[ResultsDesk Plus] v1.9.2 in Firefox sandbox, moving into the page…');
   const s = document.createElement('script');
   s.textContent = '(' + rdPlusMain.toString() + ')();';
   (document.head || document.documentElement).appendChild(s);

@@ -243,7 +243,7 @@ body.rd-tv.rd-tv.rd-tv #mapWrap {
   z-index: 9000 !important; margin: 0 !important; background: #050b16; display: block !important;
 }
 body.rd-tv.rd-tv.rd-tv #map { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; display: block !important; }
-body.rd-tv.rd-tv.rd-tv #mapWrap > :not(#map):not(.rd-dock):not(.map-stage-texture):not(#featurePopup) { display: none !important; }
+body.rd-tv.rd-tv.rd-tv #mapWrap > :not(#map):not(.rd-dock):not(.map-stage-texture):not(#featurePopup):not(#mapDetailPanel) { display: none !important; }
 body.rd-tv .rd-coalition, body.rd-tv #rdOverhang { display: none !important; }
 body.rd-tv .rd-legend { font-size: 13px; }
 body.rd-tv .rd-pin-chip { font-size: 14px; }
@@ -347,3 +347,20 @@ body.light-mode .rd-cl-ver h3 { color: #b45309; }
 /* ---------- no city labels on the map ---------- */
 .leaflet-marker-icon.poi-label-icon, .poi-label-icon .map-place-label, .poi-label-icon .poi-marker-dot { display: none !important; }
 .rd-pin-chip .rd-pin-share { color: var(--rd-panel-fg); font-weight: 800; }
+
+/* ---------- TV mode: selected electorate panel, top-left over the map ---------- */
+body.rd-tv.rd-tv.rd-tv #mapWrap > #mapDetailPanel:not(.has-result) { display: none !important; }
+body.rd-tv.rd-tv.rd-tv #mapWrap > #mapDetailPanel.has-result {
+  display: block !important; position: absolute !important; top: 14px !important; left: 14px !important;
+  right: auto !important; bottom: auto !important; width: min(500px, 42%) !important; max-width: none !important;
+  max-height: calc(100% - 28px) !important; overflow: auto !important; z-index: 850 !important; transform: none !important;
+}
+.rd-tv-detail-close { display: none; }
+body.rd-tv #mapDetailPanel.has-result > .rd-tv-detail-close {
+  display: grid; place-items: center; position: absolute; top: 10px; right: 10px; z-index: 5;
+  width: 32px; height: 32px; padding: 0; cursor: pointer;
+  background: var(--rd-panel-bg); color: var(--rd-panel-fg); border: 1px solid var(--rd-panel-line);
+  font: 400 20px/1 system-ui, sans-serif;
+}
+body.rd-tv #mapDetailPanel.has-result > .rd-tv-detail-close:hover { border-color: var(--rd-panel-muted); }
+body.rd-tv #mapDetailPanel.has-result .popup-reporting-wrap { margin-right: 36px; }

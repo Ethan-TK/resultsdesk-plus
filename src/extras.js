@@ -377,7 +377,9 @@
     window.getComposedMapFitOptions = function (...args) {
       const o = orig.apply(this, args);
       if (!document.body.classList.contains('rd-tv') || !o) return o;
-      return { ...o, paddingTopLeft: [20, 20], paddingBottomRight: [20, 20], maxZoom: Math.max(Number(o.maxZoom) || 0, 6.6) };
+      const wrapW = $('#mapWrap')?.clientWidth || 1200;
+      const left = tvDetailOpen() ? Math.min(500, wrapW * 0.42) + 40 : 20; // electorate panel sits top-left
+      return { ...o, paddingTopLeft: [left, 20], paddingBottomRight: [20, 20], maxZoom: Math.max(Number(o.maxZoom) || 0, 6.6) };
     };
   })();
   // Best fit for the TV-sized map, applied directly (the site's reset waits for animation frames
@@ -386,6 +388,24 @@
     const fit = () => { try { map.invalidateSize(false); applyBestView(false); } catch { /* ignore */ } };
     fit();
     setTimeout(fit, 600);
+  }
+
+  // TV mode: clicking an electorate shows its panel (votes, candidate ladder) top-left over the map.
+  const tvDetailOpen = () => document.body.classList.contains('rd-tv') && !!$('#mapDetailPanel.has-result');
+  function closeTvDetail() {
+    try { hideFeaturePopup(); } catch { /* ignore */ }
+    try { updateSelectedHighlight(); } catch { /* ignore */ }
+    tvFitNz();
+  }
+  function tvDetailCloseButton() {
+    const p = $('#mapDetailPanel');
+    if (!p || p.querySelector(':scope > .rd-tv-detail-close')) return;
+    const b = el('button', 'rd-tv-detail-close', '×');
+    b.type = 'button';
+    b.title = 'Close electorate (Esc)';
+    b.setAttribute('aria-label', 'Close electorate');
+    b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); closeTvDetail(); });
+    p.appendChild(b);
   }
 
   function setTv(on) {
@@ -408,7 +428,7 @@
       tvIdx = 0;
       clearInterval(tvTimer);
       tvTimer = setInterval(() => {
-        if (!tvCycle) return;
+        if (!tvCycle || tvDetailOpen()) return;
         tvIdx = (tvIdx + 1) % TV_REGIONS.length;
         if (TV_REGIONS[tvIdx] === 'resetZoomBtn') tvFitNz();
         else document.getElementById(TV_REGIONS[tvIdx])?.click();
@@ -469,7 +489,7 @@
   document.addEventListener('keydown', e => {
     if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
     if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey && !e.altKey) setTv(!document.body.classList.contains('rd-tv'));
-    if (e.key === 'Escape' && document.body.classList.contains('rd-tv')) setTv(false);
+    if (e.key === 'Escape' && document.body.classList.contains('rd-tv')) { if (tvDetailOpen()) closeTvDetail(); else setTv(false); }
   });
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement && document.body.classList.contains('rd-tv')) setTv(false);
@@ -687,6 +707,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['1.9.4', ['TV mode: clicking an electorate shows its votes and candidates; × or Esc closes it.']],
     ['1.9.3', ['Pinned electorates show the leader’s share of the vote, and the counted % is labelled "counted".']],
     ['1.9.2', ['ACT is magenta instead of yellow.']],
     ['1.9.1', ['Removed the city labels from the map.']],
@@ -1121,7 +1142,7 @@
     try { geoJsonLayer.setStyle(featureStyle); updateSelectedHighlight(); } catch { /* map not drawn yet */ }
     try { if (Array.isArray(lastSeatSummaryRows) && lastSeatSummaryRows.length) renderSeatSummary(lastSeatSummaryRows); } catch { /* ignore */ }
     ensureResetViewBtn();
-    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); buildLegend(); decorateHeldBy(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); })
+    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); buildLegend(); decorateHeldBy(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); })
       .observe(document.body, { childList: true, subtree: true });
   }
 

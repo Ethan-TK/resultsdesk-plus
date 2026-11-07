@@ -16,6 +16,7 @@ Your userscript manager will pick up new versions automatically.
 - **Striped flipped seats.** Electorates where the leader differs from the last election's winner get diagonal stripes over the new party's colour.
 - **Margin shading.** Close races are paler, safe seats solid. A legend on the map switches it on and off.
 
+- **Special votes.** The New Zealand panel shows how many special votes are still to count (the Electoral Commission's estimate), their share of all votes, turnout so far and with them included, and when the official count is due (Fri 27 Nov). Each electorate panel shows a rough estimate for that seat (national rate × votes counted there) and flags "could change" when the lead is small next to it. TV mode shows the national total.
 - **Sitting MP.** The electorate panel shows who holds the seat ("Held by …") on 2026 live results. Based on 2023 winners plus the Port Waikato (2023) and Tāmaki Makaurau (2025) by-elections; the party shown is the one they were elected for. New 2026 electorates show "New electorate".
 - **All parties, sized to fit.** The New Zealand panel lists every party (no "Show more" button), reaches down to the bottom of the screen, and shrinks the rows so every party on 4% or more fits without scrolling. On very short screens the bloc builder under the totals is hidden to make room.
 - **Party colours.** Every party uses its own colour (Opportunity and ACT's magenta from their websites, the rest from Wikipedia's party colour data) on the map, party table and panels.

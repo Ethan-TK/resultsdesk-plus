@@ -7,15 +7,35 @@ function rdInstallCore() {
   // ---------- 1. Speed ----------
   // Live data requests skip the browser cache.
   const realFetch = window.fetch.bind(window);
+  // National statistics from the Electoral Commission XML inside the results bundle
+  // (the site doesn't show these): special votes still to count, votes cast, turnout so far.
+  function captureNational(res) {
+    if (!res || !res.ok) return;
+    res.clone().json().then(j => {
+      const x = j && j.election;
+      if (typeof x !== 'string') return;
+      const num = t => { const m = x.match(new RegExp('<' + t + '>([^<]*)</' + t + '>')); return m && m[1].trim() !== '' ? Number(m[1]) : null; };
+      window.__rdNational = {
+        dataset: j.dataset, updated: (x.match(/<election[^>]*updated="([^"]+)"/) || [])[1] || null,
+        specials: num('total_special_votes'), cast: num('total_votes_cast'), castPct: num('percent_votes_cast'),
+        placesPct: num('percent_voting_places_counted'), finalPct: num('percent_electorates_final'), at: Date.now(),
+      };
+      window.dispatchEvent(new Event('rd-national'));
+    }).catch(() => {});
+  }
   window.fetch = function (input, init) {
+    let bundle = false;
     try {
       const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       const u = new URL(raw, location.href);
       if (/(^|\.)resultsdesk\.nz$/.test(u.hostname) && /results-bundle|trend-history|live-bundle|live-2026|collector-state/.test(u.pathname)) {
         init = Object.assign({}, init, { cache: 'no-store' });
       }
+      bundle = /results-bundle\.json$/.test(u.pathname) && !(init && init.method && init.method !== 'GET');
     } catch { /* leave untouched */ }
-    return realFetch(input, init);
+    const p = realFetch(input, init);
+    if (bundle) p.then(captureNational, () => {});
+    return p;
   };
 
   // Replace the 30 s shared "rd_live_tick" URL bucket with a unique URL per request,
@@ -68,6 +88,8 @@ function rdInstallCore() {
     } catch { /* network blip */ }
   }
   setInterval(watch, 1000);
+  // The app may have fetched the bundle before these hooks were installed: fetch it once ourselves.
+  setTimeout(() => { const u = liveBundleUrl(); if (u && !window.__rdNational) realFetch(u + (u.includes('?') ? '&' : '?') + 'n=' + Date.now(), { cache: 'no-store' }).then(captureNational, () => {}); }, 1500);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && liveBundleUrl()) refreshNow(); });
 
   // ---------- 2. Map styling ----------

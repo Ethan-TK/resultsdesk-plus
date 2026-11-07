@@ -449,6 +449,7 @@
     const tv = $('#rdTv');
     if (!tv) return;
     const pct = countedPct();
+    const spec = specials();
     const maxSeats = Math.max(1, ...st.parties.map(p => p.seats));
     const rows = st.parties.slice(0, 8).map(p => `
       <div class="rd-tv-row">
@@ -460,7 +461,7 @@
     tv.innerHTML = `
       <div class="rd-tv-top">
         <div><div class="rd-tv-title">NZ Election ${esc(String(ds()).match(/\d{4}/)?.[0] || '')}</div>
-        <div class="rd-tv-sub">${pct == null ? '' : `${pct.toFixed(1)}% of voting places counted · `}<span class="rd-tv-clock">${new Date().toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })}</span></div></div>
+        <div class="rd-tv-sub">${pct == null ? '' : `${pct.toFixed(1)}% of voting places counted · `}${spec && !spec.counted ? `~${fmt(spec.left)} special votes still to count · ` : ''}<span class="rd-tv-clock">${new Date().toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })}</span></div></div>
         <div class="rd-tv-actions"><button data-tv="cycle" type="button">${tvCycle ? 'Auto-tour on' : 'Auto-tour off'}</button><button data-tv="exit" type="button">Exit ✕</button></div>
       </div>
       <div class="rd-tv-seats">${rows || '<div class="rd-tv-sub">Waiting for seat results…</div>'}</div>
@@ -543,6 +544,71 @@
       tag.innerHTML = heldByHtml(name);
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // 6b. Special votes (2026 live only). Election-night counts leave out special votes
+  // (overseas, enrolled late, voted outside their electorate, etc.); the Electoral Commission
+  // feed gives an estimate of how many there are. They're counted for the official results.
+  // ---------------------------------------------------------------------------
+  const OFFICIAL_RESULTS_AT = Date.parse('2026-11-27T14:00:00+13:00'); // Fri 27 Nov 2026, NZ time
+  const OFFICIAL_RESULTS_LABEL = 'Fri 27 Nov';
+  function specials() {
+    const n = window.__rdNational;
+    if (ds() !== 'EC_LIVE_2026' || !n || !(n.specials > 0) || !(n.cast > 0)) return null;
+    const total = n.cast + n.specials;
+    const enrolled = n.castPct > 0 ? n.cast / (n.castPct / 100) : null;
+    return {
+      left: n.specials, cast: n.cast, total,
+      share: n.specials / total,                       // specials as a share of all votes
+      ratio: n.specials / n.cast,                      // specials per vote counted so far
+      turnoutNow: n.castPct, turnoutAll: enrolled ? total / enrolled * 100 : null,
+      counted: Date.now() >= OFFICIAL_RESULTS_AT,
+    };
+  }
+  function specialsNationalHtml(s) {
+    if (s.counted) return `<div class="rd-spec-top"><span class="rd-spec-label">Special votes</span><b>${fmt(s.left)}</b><span class="rd-spec-tag is-done">counted</span></div>
+      <div class="rd-spec-sub">Included in the official results (${OFFICIAL_RESULTS_LABEL}).</div>`;
+    return `<div class="rd-spec-top"><span class="rd-spec-label">Special votes</span><b>~${fmt(s.left)}</b><span class="rd-spec-tag">still to count</span></div>
+      <div class="rd-spec-bar" title="Counted so far vs special votes still to count"><i style="width:${(100 - s.share * 100).toFixed(1)}%"></i></div>
+      <div class="rd-spec-sub">${(s.share * 100).toFixed(1)}% of all votes · ${fmt(s.cast)} counted so far${s.turnoutAll ? ` · turnout ${s.turnoutNow.toFixed(1)}% → ~${s.turnoutAll.toFixed(1)}%` : ''} · official count ${OFFICIAL_RESULTS_LABEL}</div>`;
+  }
+  // Per electorate there's no figure, so estimate from the national ratio (it varies a lot:
+  // city and student seats usually have far more specials than average).
+  const SPECIALS_SWING = 0.2; // flag seats where the lead is under ~20% of their estimated specials
+  function specialsSeatHtml(s, live) {
+    const votes = Number(live?.total_votes) || 0;
+    if (!(votes > 0) || s.counted) return '';
+    const est = Math.round(votes * s.ratio / 10) * 10;
+    const margin = Number(live?.margin_votes) || 0;
+    const close = margin > 0 && margin < est * SPECIALS_SWING;
+    return `<span class="rd-held-label">Specials</span><span class="rd-spec-seat" title="Estimated from the national rate of ${(s.ratio * 100).toFixed(1)} special votes per 100 counted; the real number varies by electorate">~${fmt(est)} still to count</span>${close ? `<span class="rd-spec-tag is-close" title="Lead of ${fmt(margin)} is small next to the special votes still to come">could change</span>` : ''}`;
+  }
+  function decorateSpecials() {
+    const s = specials();
+    // National summary: a strip under the header.
+    const nat = $('#mapDetailPanel .map-national-summary > .popup-header');
+    let box = nat?.parentElement.querySelector(':scope > .rd-specials');
+    if (!s || !nat) box?.remove();
+    else {
+      if (!box) { box = el('div', 'rd-specials'); nat.insertAdjacentElement('afterend', box); }
+      const h = specialsNationalHtml(s);
+      if (box.dataset.h !== h) { box.dataset.h = h; box.innerHTML = h; setTimeout(fitPartyRows, 0); }
+    }
+    // Electorate panels: a line under "Held by".
+    document.querySelectorAll('.popup-header').forEach(hd => {
+      const name = hd.querySelector('h3')?.textContent.trim();
+      const live = name ? liveByName(name) : null;
+      let tag = hd.querySelector('.rd-spec-line');
+      const h = s && live ? specialsSeatHtml(s, live) : '';
+      if (!h) { tag?.remove(); return; }
+      if (!tag) {
+        tag = el('div', 'rd-spec-line');
+        (hd.querySelector('.rd-held') || hd.querySelector('.popup-context-label') || hd.querySelector('h3')).insertAdjacentElement('afterend', tag);
+      }
+      if (tag.dataset.h !== h) { tag.dataset.h = h; tag.innerHTML = h; }
+    });
+  }
+  window.addEventListener('rd-national', () => { decorateSpecials(); if (document.body.classList.contains('rd-tv')) renderTv(); });
 
   // ---------------------------------------------------------------------------
   // 11. Pinned electorates: a faint pin icon beside the name in the electorate panel;
@@ -707,6 +773,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['1.10.0', ['Special votes: the New Zealand panel shows how many are still to count, their share of all votes, turnout with them included and when the official count is due; electorate panels show an estimate for that seat and flag leads they could overturn. TV mode shows the total too.']],
     ['1.9.4', ['TV mode: clicking an electorate shows its votes and candidates; × or Esc closes it.']],
     ['1.9.3', ['Pinned electorates show the leader’s share of the vote, and the counted % is labelled "counted".']],
     ['1.9.2', ['ACT is magenta instead of yellow.']],
@@ -1133,7 +1200,7 @@
     updateLayoutVars();
     renderSeatsUi();
     scanChanges();
-    decorateHeldBy();
+    decorateHeldBy(); decorateSpecials();
     decoratePinButtons();
     renderPins();
     expandPartyList();
@@ -1142,7 +1209,7 @@
     try { geoJsonLayer.setStyle(featureStyle); updateSelectedHighlight(); } catch { /* map not drawn yet */ }
     try { if (Array.isArray(lastSeatSummaryRows) && lastSeatSummaryRows.length) renderSeatSummary(lastSeatSummaryRows); } catch { /* ignore */ }
     ensureResetViewBtn();
-    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); buildLegend(); decorateHeldBy(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); })
+    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); })
       .observe(document.body, { childList: true, subtree: true });
   }
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      1.7.5
+// @version      1.7.6
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -807,9 +807,9 @@ function rdInstallCore() {
       const rail = visibleRect($('#mapMagicWallControlsRail'));
       if (rail && rail.right > m.left + m.width / 2) right = Math.max(right, m.right - rail.left + gap);
       if (left + right > m.width - 120) { left = gap; right = gap; } // too narrow to dodge them; just fit
-      // Each item in the bottom stack (overhang notice, each pinned chip, key) is its own
-      // obstacle, so a wide row of chips only blocks where the chips actually are.
-      const items = $('#rdDock') ? [...$('#rdDock').querySelectorAll(':scope > .rd-overhang, :scope > .rd-pins > .rd-pin-chip, :scope > .rd-legend')] : [];
+      // The key and overhang notice are obstacles (each on its own). Pinned chips are ignored:
+      // they may sit over land rather than shrink the map.
+      const items = $('#rdDock') ? [...$('#rdDock').querySelectorAll(':scope > .rd-overhang, :scope > .rd-legend')] : [];
       const boxes = items.map(visibleRect).filter(Boolean)
         .map(d => ({ l: d.left - m.left - gap, t: d.top - m.top - gap, r: d.right - m.left + gap, b: d.bottom - m.top + gap }));
       const box = boxes.length ? boxes : null;
@@ -1114,7 +1114,7 @@ function rdInstallCore() {
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
-      console.log('[ResultsDesk Plus] active v' + '1.7.5' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      console.log('[ResultsDesk Plus] active v' + '1.7.6' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 900) {
       setTimeout(whenReady, 100);
     } else {
@@ -1130,7 +1130,7 @@ const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
 if (!sandboxed) {
   rdPlusMain();
 } else {
-  console.log('[ResultsDesk Plus] v1.7.5 in Firefox sandbox, moving into the page…');
+  console.log('[ResultsDesk Plus] v1.7.6 in Firefox sandbox, moving into the page…');
   const s = document.createElement('script');
   s.textContent = '(' + rdPlusMain.toString() + ')();';
   (document.head || document.documentElement).appendChild(s);

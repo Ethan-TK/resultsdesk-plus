@@ -72,6 +72,7 @@
     }
     renderBadges();
     renderTicker();
+    renderPins();
   }
 
   function renderBadges() {
@@ -112,9 +113,32 @@
   // 2. Margin legend (shading itself is in the patched map styles)
   // ---------------------------------------------------------------------------
   window.rdMarginShading = store.get('rd-margin-shading', true);
-  function buildLegend() {
+
+  // Bottom-right stack on the map, top to bottom: overhang notice, pinned electorates, key.
+  // One container so they never overlap; CSS flips it to the top-left on stacked layouts.
+  function ensureDock() {
     const wrap = $('#mapWrap');
-    if (!wrap || $('#rdLegend')) return;
+    if (!wrap) return null;
+    let dock = $('#rdDock');
+    if (!dock) {
+      dock = el('div', 'rd-dock');
+      dock.id = 'rdDock';
+      wrap.appendChild(dock);
+    }
+    const slot = (id, cls) => {
+      let n = document.getElementById(id);
+      if (!n) { n = el('div', cls); n.id = id; n.hidden = true; }
+      return n;
+    };
+    const order = [slot('rdOverhang', 'rd-overhang'), slot('rdPins', 'rd-pins'), $('#rdLegend')].filter(Boolean);
+    order.forEach((n, i) => { if (dock.children[i] !== n) dock.insertBefore(n, dock.children[i] || null); });
+    return dock;
+  }
+
+  function buildLegend() {
+    const dock = ensureDock();
+    if (!dock || $('#rdLegend')) return;
+    const wrap = dock;
     const lg = el('div', 'rd-legend');
     lg.id = 'rdLegend';
     lg.innerHTML = `
@@ -238,12 +262,7 @@
       p.hidden = !coalOpen;
       wrap.appendChild(p);
     }
-    if (!$('#rdOverhang')) {
-      const o = el('div', 'rd-overhang');
-      o.id = 'rdOverhang';
-      o.hidden = true;
-      wrap.appendChild(o);
-    }
+    ensureDock(); // creates #rdOverhang and #rdPins in the bottom-right stack
     // Rail button (the rail is rebuilt by the app now and then, so re-add when missing).
     const dock = $('#mapMagicWallControlsRail .map-icon-dock');
     if (dock && !dock.querySelector('[data-map-icon="rdCoalition"]')) {
@@ -272,6 +291,7 @@
     ensureCoalitionUi();
     const st = seatState();
     updateKeyColour(st);
+    renderPins();
     const hist = recordHistory(st);
     const p = $('#rdCoalition');
     if (p && !p.hidden) p.innerHTML = st.total ? coalitionHtml(st, hist) : '<div class="rd-coal-head"><strong>Coalition tracker</strong></div><div class="rd-verdict">Waiting for seat results…</div>';
@@ -450,6 +470,111 @@
   }
 
   // ---------------------------------------------------------------------------
+  // 11. Pinned electorates: a faint pin icon beside the name in the electorate panel;
+  // pinned seats show as small chips above the key (leader colour, margin, % counted).
+  // Nothing extra appears until something is pinned. Remembered between visits.
+  // ---------------------------------------------------------------------------
+  const PIN_MAX = 6;
+  let pins = store.get('rd-pins', []);
+  const PIN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
+
+  // Every electorate's latest row, General and Māori, whichever map layer is showing.
+  function allRows() {
+    const out = [];
+    try {
+      for (const kind of ['General', 'Maori']) {
+        const rows = cachedResultsRows?.[`${ds()}:${kind}:results`];
+        if (Array.isArray(rows)) rows.forEach(row => out.push({ row, kind }));
+      }
+    } catch { /* not loaded yet */ }
+    return out;
+  }
+  function rowByName(name) {
+    const live = liveByName(name); // the map's own copy carries previous-winner data for flips
+    if (live) return live;
+    return allRows().find(x => x.row.electorate_name === name)?.row || null;
+  }
+  const isPinnable = name => !!name && !!(HELD_BY[name] || rowByName(name));
+
+  function pinChipHtml(name) {
+    const r = rowByName(name);
+    const pv = (() => { try { return currentViewMode === 'partyvote'; } catch { return false; } })();
+    const lead = r && (pv ? r.party_vote_leader_party : r.leader_party);
+    const leadVotes = Number(r && (pv ? r.party_vote_leader_votes : r.leader_votes)) || 0;
+    const margin = Number(r && (pv ? r.party_vote_margin_votes : r.margin_votes)) || 0;
+    const has = lead && lead !== 'Unknown' && leadVotes > 0;
+    const total = Number(r?.voting_places_total) || 0;
+    const pct = total > 0 ? (Number(r.voting_places_counted) || 0) / total * 100 : (r ? Number(r.reporting_pct) || 0 : null);
+    let flip = false;
+    try { flip = has && getMapDataResultStatus(r) === 'flipped'; } catch { /* no comparison data */ }
+    return `<div class="rd-pin-chip">
+      <button type="button" class="rd-pin-open" data-pin="${esc(name)}" title="Open ${esc(name)}">
+        <span class="rd-pin-bar${flip ? ' is-flip' : ''}" style="--c:${has ? partyColor(lead) : '#64748b'}"></span>
+        <b>${esc(name)}</b>
+        <span class="rd-pin-lead">${has ? `${esc(partyLabel(lead))} +${fmt(margin)}` : 'no votes yet'}</span>
+        ${pct == null ? '' : `<span class="rd-pin-pct">${pct.toFixed(0)}%</span>`}
+      </button>
+      <button type="button" class="rd-pin-x" data-unpin="${esc(name)}" title="Unpin" aria-label="Unpin ${esc(name)}">×</button>
+    </div>`;
+  }
+
+  function renderPins() {
+    ensureDock();
+    const box = $('#rdPins');
+    if (!box) return;
+    box.hidden = !pins.length;
+    const html = pins.map(pinChipHtml).join('');
+    if (box.innerHTML !== html) box.innerHTML = html;
+  }
+
+  function togglePin(name) {
+    pins = pins.includes(name) ? pins.filter(n => n !== name) : [...pins, name].slice(-PIN_MAX);
+    store.set('rd-pins', pins);
+    renderPins();
+    decoratePinButtons();
+  }
+
+  async function openElectorate(name) {
+    const find = () => { let hit = null; try { geoJsonLayer.eachLayer(l => { if (l.feature?.properties?.live?.electorate_name === name) hit = l; }); } catch { /* no map */ } return hit; };
+    let layer = find();
+    if (!layer) { // pinned seat is on the other layer (General vs Māori): switch, then wait for it
+      const kind = allRows().find(x => x.row.electorate_name === name)?.kind;
+      document.getElementById(kind === 'Maori' ? 'maoriBtnMap' : 'generalBtnMap')?.click();
+      for (let i = 0; i < 40 && !(layer = find()); i++) await new Promise(r => setTimeout(r, 100));
+    }
+    if (layer) layer.fire('click', { latlng: layer.getCenter(), originalEvent: new MouseEvent('click') });
+  }
+
+  function decoratePinButtons() {
+    document.querySelectorAll('.popup-header h3').forEach(h3 => {
+      const name = h3.textContent.trim();
+      let b = h3.querySelector('.rd-pin-btn');
+      if (!isPinnable(name)) { b?.remove(); return; }
+      if (!b) {
+        b = el('button', 'rd-pin-btn', PIN_SVG);
+        b.type = 'button';
+        b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); togglePin(b.dataset.for); });
+        h3.appendChild(b);
+      }
+      const on = pins.includes(name);
+      if (b.dataset.for !== name || b.classList.contains('is-pinned') !== on) {
+        b.dataset.for = name;
+        b.classList.toggle('is-pinned', on);
+        b.title = on ? `Unpin ${name}` : `Pin ${name}`;
+        b.setAttribute('aria-label', b.title);
+        b.setAttribute('aria-pressed', String(on));
+      }
+    });
+  }
+
+  document.addEventListener('click', e => {
+    const x = e.target.closest?.('.rd-pin-x');
+    if (x) { e.preventDefault(); togglePin(x.dataset.unpin); return; }
+    const open = e.target.closest?.('.rd-pin-open');
+    if (open) { e.preventDefault(); openElectorate(open.dataset.pin); }
+  });
+
+  // ---------------------------------------------------------------------------
   // 7. Rebrand: "ResultsDesk" -> BRAND in visible text, tab title, labels and logo.
   // The footer design credit to ResultsDesk.nz is left as-is.
   // ---------------------------------------------------------------------------
@@ -596,7 +721,9 @@
     renderSeatsUi();
     scanChanges();
     decorateHeldBy();
-    new MutationObserver(() => { ensureCoalitionUi(); tvButton(); buildLegend(); decorateHeldBy(); headerToggle(); })
+    decoratePinButtons();
+    renderPins();
+    new MutationObserver(() => { ensureCoalitionUi(); tvButton(); buildLegend(); decorateHeldBy(); decoratePinButtons(); headerToggle(); })
       .observe(document.body, { childList: true, subtree: true });
   }
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      1.4.0
+// @version      1.5.0
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -40,7 +40,7 @@ function rdPlusMain() {
     if (document.getElementById('rdPlusStyles')) return;
     const style = document.createElement('style');
     style.id = 'rdPlusStyles';
-    style.textContent = "/* ResultsDesk clone extras */\n@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');\n.app-support-link, .app-contact-link { display: none !important; }\n\n/* ---------- rebrand logo ---------- */\n.app-brand .rd-brand-text {\n  font: 400 34px/1 'Bebas Neue', 'Oswald', Impact, sans-serif; letter-spacing: .01em;\n  color: #fff; white-space: nowrap; display: inline-block; transform: translateY(2px);\n}\n.app-brand .rd-brand-text b { font-weight: 400; color: #fde047; }\nbody.light-mode .app-brand .rd-brand-text { color: #0f1d33; }\nbody.light-mode .app-brand .rd-brand-text b { color: #b45309; }\n@media (max-width: 660px) { .app-brand .rd-brand-text { font-size: 26px; } }\n\n/* ---------- no footer ---------- */\nbody.dashboard-body .dashboard-footer { display: none !important; }\n\n/* ---------- desktop map view: edge to edge, fills the window, never moves ----------\n   901px+ is the site's map-with-side-panel layout (below that it stacks into a scrolling sheet).\n   `clip` (unlike `hidden`) also stops the site's own scrollIntoView calls nudging the page.\n   --rd-map-top is the map's top edge, kept up to date by extras.js. */\nhtml, body { overscroll-behavior: none; }\n@media (min-width: 901px) {\n  html:has(body.dashboard-body[data-dashboard-view=\"map\"]) { overflow: clip !important; height: 100% !important; }\n  html body.dashboard-body[data-dashboard-view=\"map\"] { overflow: clip !important; height: 100vh !important; min-height: 0 !important; }\n  html body.dashboard-body[data-dashboard-view=\"map\"] .dashboard-shell {\n    width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important;\n  }\n  html body.dashboard-body[data-dashboard-view=\"map\"] .app-header-inner {\n    width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 16px !important;\n  }\n  html body.dashboard-body[data-dashboard-view=\"map\"] .dashboard-view-tabs { padding-left: 8px !important; }\n  html body.dashboard-body[data-dashboard-view=\"map\"] .map-card,\n  html body.dashboard-body[data-dashboard-view=\"map\"] .map-card-body,\n  html body.dashboard-body[data-dashboard-view=\"map\"] #mapWrap,\n  html body.dashboard-body[data-dashboard-view=\"map\"] #map {\n    height: calc(100vh - var(--rd-map-top, 81px)) !important; max-height: none !important; min-height: 0 !important;\n    border-radius: 0 !important;\n  }\n}\n\n/* ---------- top bar show/hide arrow ---------- */\nbody.rd-hide-header .app-header { display: none !important; }\n.rd-header-toggle {\n  position: fixed; left: 50%; top: var(--rd-header-h, 50px); transform: translateX(-50%); z-index: 9500;\n  width: 44px; height: 18px; padding: 0; display: grid; place-items: center; cursor: pointer;\n  border: 1px solid var(--rd-panel-line); border-top: 0; border-radius: 0 0 8px 8px;\n  background: var(--rd-panel-bg); color: var(--rd-panel-fg); opacity: .75;\n}\n.rd-header-toggle:hover, .rd-header-toggle:focus-visible { opacity: 1; }\n.rd-header-toggle svg { width: 14px; height: 14px; transition: transform .2s; }\nbody.rd-hide-header .rd-header-toggle { top: 0; }\nbody.rd-hide-header .rd-header-toggle svg { transform: rotate(180deg); }\nbody.rd-tv .rd-header-toggle { display: none; }\n\n:root {\n  --rd-panel-bg: rgba(7, 20, 38, .94);\n  --rd-panel-fg: #e5edf7;\n  --rd-panel-muted: #94a3b8;\n  --rd-panel-line: rgba(148, 163, 184, .22);\n}\nbody.light-mode {\n  --rd-panel-bg: rgba(255, 255, 255, .96);\n  --rd-panel-fg: #0f1d33;\n  --rd-panel-muted: #55657d;\n  --rd-panel-line: rgba(15, 29, 51, .14);\n}\n\n/* ---------- last-changed badges ---------- */\n.rd-badge-wrap { background: none !important; border: 0 !important; width: 0 !important; height: 0 !important; }\n.rd-badge {\n  position: absolute; transform: translate(-50%, -50%);\n  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;\n  padding: 2px 7px; border-radius: 999px;\n  font: 800 10.5px/1.5 Montserrat, system-ui, sans-serif; letter-spacing: .02em;\n  background: #fde047; color: #111827; border: 1px solid rgba(0, 0, 0, .35);\n  box-shadow: 0 2px 6px rgba(0, 0, 0, .35);\n  opacity: var(--rd-age, 1); pointer-events: none;\n}\n.rd-badge span { font-weight: 600; opacity: .72; }\n.rd-badge.is-lead-change { background: #fff; outline: 2px solid #f43f5e; }\n.rd-badge.is-fresh { animation: rd-pulse 1.3s ease-out infinite; }\n@keyframes rd-pulse {\n  0% { box-shadow: 0 0 0 0 rgba(253, 224, 71, .85); }\n  100% { box-shadow: 0 0 0 14px rgba(253, 224, 71, 0); }\n}\n\n/* ---------- margin legend ---------- */\n.rd-legend {\n  position: absolute; right: 84px; bottom: 10px; z-index: 820;\n  display: flex; align-items: center; gap: 4px; padding: 5px 9px;\n  background: var(--rd-panel-bg); color: var(--rd-panel-fg); border: 1px solid var(--rd-panel-line);\n  font: 600 11px Montserrat, system-ui, sans-serif; white-space: nowrap;\n}\n.rd-legend small { margin-right: 5px; color: var(--rd-panel-muted); font-size: 10.5px; }\n/* --rd-key = colour of the currently leading party (set by extras.js); blue until results arrive */\n.rd-legend .rd-sw { width: 14px; height: 11px; background: var(--rd-key, #3b82f6); transition: background .4s; }\n.rd-legend .rd-sw-hatch { opacity: .9; background: repeating-linear-gradient(-45deg, var(--rd-key, #3b82f6) 0 4px, rgba(10, 14, 24, .75) 4px 7px); }\n.rd-legend-toggle {\n  margin-right: 6px; padding: 2px 7px; border: 1px solid var(--rd-panel-line); background: transparent;\n  color: inherit; font: 800 10.5px Montserrat, system-ui, sans-serif; text-transform: uppercase; cursor: pointer;\n}\n.rd-legend.is-off .rd-sw:not(.rd-sw-hatch) { opacity: .85 !important; filter: grayscale(1); }\n.rd-legend.is-off .rd-legend-toggle { text-decoration: line-through; }\n/* Compact layout: the results sheet covers the bottom of the map, so sit at the top instead. */\n@media (max-width: 900px) {\n  .rd-legend { top: 52px; bottom: auto; left: 8px; right: auto; }\n  .rd-legend small { display: none; }\n}\n\n/* ---------- coalition tracker ---------- */\n.rd-coal-btn.active { color: #fde047 !important; }\n.rd-coalition {\n  position: absolute; top: 12px; right: 84px; z-index: 830; width: 330px; max-height: calc(100% - 70px); overflow: auto;\n  padding: 12px; background: var(--rd-panel-bg); color: var(--rd-panel-fg); border: 1px solid var(--rd-panel-line);\n  font: 500 12.5px/1.4 Montserrat, system-ui, sans-serif; box-shadow: 0 10px 30px rgba(0, 0, 0, .35);\n}\n.rd-coalition[hidden] { display: none; }\n.rd-coal-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }\n.rd-coal-head strong { font-weight: 800; font-size: 14px; }\n.rd-coal-head span { color: var(--rd-panel-muted); font-size: 11.5px; }\n.rd-bloc-bar { position: relative; display: flex; height: 14px; background: rgba(148, 163, 184, .2); overflow: visible; }\n.rd-bloc-bar span { height: 100%; }\n.rd-bloc-bar i { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--rd-panel-fg); }\n.rd-verdict { margin: 8px 0 10px; font-size: 12px; }\n.rd-bloc { padding: 7px 0; border-top: 1px solid var(--rd-panel-line); }\n.rd-bloc-head { display: flex; align-items: center; gap: 7px; font-weight: 700; }\n.rd-bloc-head strong { margin-left: auto; font-size: 18px; font-weight: 900; }\n.rd-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; display: inline-block; }\n.rd-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }\n.rd-chip { padding: 1px 6px; border-left: 4px solid var(--c); background: rgba(148, 163, 184, .14); font-size: 11.5px; font-weight: 700; }\n.rd-spark-label { margin-top: 8px; color: var(--rd-panel-muted); font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }\n.rd-spark { display: block; width: 100%; height: 70px; margin-top: 4px; color: var(--rd-panel-muted); }\n.rd-spark-empty { color: var(--rd-panel-muted); font-size: 11.5px; margin-top: 4px; }\n@media (max-width: 760px) { .rd-coalition { right: 8px; left: 8px; width: auto; top: 8px; } }\n\n/* ---------- overhang notice ---------- */\n.rd-overhang {\n  position: absolute; bottom: 48px; right: 84px; z-index: 825; max-width: min(460px, calc(100% - 120px));\n  padding: 7px 12px; background: #fef3c7; color: #422006; border: 1px solid #f59e0b;\n  font: 500 12.5px/1.45 Montserrat, system-ui, sans-serif; box-shadow: 0 6px 18px rgba(0, 0, 0, .25);\n}\n.rd-overhang[hidden] { display: none; }\n@media (max-width: 900px) { .rd-overhang { top: 88px; bottom: auto; left: 8px; right: 84px; max-width: none; font-size: 11.5px; } }\n\n/* ---------- sitting MP in electorate panel ---------- */\n.rd-held {\n  grid-column: 1; /* the panel header is a 2-column grid; stay under the title, left of the % box */\n  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px; margin-top: 6px;\n  font: 600 12px/1.3 Montserrat, system-ui, sans-serif; color: inherit;\n}\n.rd-held-label { font-size: 9.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; opacity: .6; }\n.rd-held-name { font-weight: 800; }\n.rd-held-party { padding: 1px 6px; border-left: 4px solid var(--c); background: rgba(148, 163, 184, .16); font-size: 10.5px; font-weight: 800; text-transform: uppercase; }\n.rd-held-was, .rd-held-new { opacity: .7; font-size: 11px; }\n\n/* ---------- TV mode ---------- */\n.rd-tv-btn { display: inline-flex !important; align-items: center; gap: 6px; }\n.rd-tv-panel { display: none; }\nbody.rd-tv { overflow: hidden !important; }\n/* .rd-tv repeated to outrank the site's own body.dashboard-body[data-dashboard-view] rules */\nbody.rd-tv.rd-tv.rd-tv #mapWrap {\n  position: fixed !important; inset: 0 31vw 0 0 !important; width: auto !important; height: auto !important;\n  z-index: 9000 !important; margin: 0 !important; background: #050b16; display: block !important;\n}\nbody.rd-tv.rd-tv.rd-tv #map { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; display: block !important; }\nbody.rd-tv.rd-tv.rd-tv #mapWrap > :not(#map):not(.rd-legend):not(.map-stage-texture):not(#featurePopup) { display: none !important; }\nbody.rd-tv .rd-coalition, body.rd-tv #rdOverhang { display: none !important; }\nbody.rd-tv .rd-legend { right: 12px !important; }\nbody.rd-tv .rd-legend { font-size: 13px; }\nbody.rd-tv .rd-badge { font-size: 13px; }\nbody.rd-tv .rd-tv-panel {\n  display: flex; flex-direction: column; gap: 1.2vh;\n  position: fixed; top: 0; right: 0; bottom: 0; width: 31vw; z-index: 9001; overflow: hidden;\n  padding: 2.4vh 1.8vw; background: #071426; color: #e5edf7; border-left: 1px solid rgba(148, 163, 184, .2);\n  font: 500 clamp(13px, 1.05vw, 22px)/1.35 Montserrat, system-ui, sans-serif;\n}\n.rd-tv-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }\n.rd-tv-title { font-weight: 900; font-size: 1.9em; letter-spacing: -.01em; }\n.rd-tv-sub { color: #94a3b8; }\n.rd-tv-actions { display: flex; gap: 6px; }\n.rd-tv-actions button { white-space: nowrap; padding: .3em .7em; border: 1px solid rgba(148, 163, 184, .35); background: transparent; color: inherit; font: 700 .8em Montserrat, sans-serif; cursor: pointer; }\n.rd-tv-seats { display: grid; gap: .55vh; }\n.rd-tv-row { display: grid; grid-template-columns: 8.5em 1fr 2.4em; align-items: center; gap: .6em; font-weight: 700; }\n.rd-tv-row strong { text-align: right; font-size: 1.45em; font-weight: 900; }\n.rd-tv-row sup { color: #f59e0b; }\n.rd-tv-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.rd-tv-bar { height: 1.15em; background: rgba(148, 163, 184, .12); }\n.rd-tv-bar i { display: block; height: 100%; }\n.rd-tv-coal { padding-top: 1vh; border-top: 1px solid rgba(148, 163, 184, .2); }\n.rd-tv-coal-head { margin-bottom: .5em; color: #94a3b8; }\n.rd-tv-coal .rd-bloc-bar { height: 1.3em; }\n.rd-tv-coal .rd-bloc-bar i { background: #fff; }\n.rd-tv-blocs { display: grid; gap: .2em; margin-top: .6em; }\n.rd-tv-blocs span { display: flex; align-items: center; gap: .5em; }\n.rd-tv-blocs i { width: .8em; height: .8em; border-radius: 50%; }\n.rd-tv-blocs b { margin-left: auto; font-size: 1.25em; }\n.rd-tv-overhang { position: static; transform: none; max-width: none; font-size: .9em; }\n.rd-tv-ticker-label { padding-top: 1vh; border-top: 1px solid rgba(148, 163, 184, .2); color: #94a3b8; font-size: .78em; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }\n.rd-ticker { display: grid; gap: .45em; min-height: 0; overflow: hidden; }\n.rd-ticker-item { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: .55em; font-size: .92em; }\n.rd-ticker-item span:not(.rd-dot) { color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.rd-ticker-item small { color: #94a3b8; }\n.rd-ticker-item.is-lead-change b { color: #fda4af; }\n@media (max-width: 900px) {\n  body.rd-tv #mapWrap { inset: 0 0 46vh 0 !important; }\n  body.rd-tv .rd-tv-panel { top: 54vh; width: 100%; border-left: 0; overflow: auto; }\n}\n";
+    style.textContent = "/* ResultsDesk clone extras */\n@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');\n.app-support-link, .app-contact-link { display: none !important; }\n\n/* ---------- rebrand logo ---------- */\n.app-brand .rd-brand-text {\n  font: 400 34px/1 'Bebas Neue', 'Oswald', Impact, sans-serif; letter-spacing: .01em;\n  color: #fff; white-space: nowrap; display: inline-block; transform: translateY(2px);\n}\n.app-brand .rd-brand-text b { font-weight: 400; color: #fde047; }\nbody.light-mode .app-brand .rd-brand-text { color: #0f1d33; }\nbody.light-mode .app-brand .rd-brand-text b { color: #b45309; }\n@media (max-width: 660px) { .app-brand .rd-brand-text { font-size: 26px; } }\n\n/* ---------- no footer ---------- */\nbody.dashboard-body .dashboard-footer { display: none !important; }\n\n/* ---------- desktop map view: edge to edge, fills the window, never moves ----------\n   901px+ is the site's map-with-side-panel layout (below that it stacks into a scrolling sheet).\n   `clip` (unlike `hidden`) also stops the site's own scrollIntoView calls nudging the page.\n   --rd-map-top is the map's top edge, kept up to date by extras.js. */\nhtml, body { overscroll-behavior: none; }\n@media (min-width: 901px) {\n  /* Edge to edge on every tab (Map, Electorates, Trends). The [data-dashboard-view] attribute\n     selector matches the site's own per-view rules so ours win. */\n  html body.dashboard-body[data-dashboard-view] .dashboard-shell {\n    width: 100% !important; max-width: none !important; margin-left: 0 !important; margin-right: 0 !important;\n    padding-left: 0 !important; padding-right: 0 !important;\n  }\n  html body.dashboard-body[data-dashboard-view] .app-header-inner {\n    width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 16px !important;\n  }\n  html body.dashboard-body[data-dashboard-view] .dashboard-view-tabs { padding-left: 8px !important; }\n  /* Map tab only: exact window height, no page scroll. */\n  html:has(body.dashboard-body[data-dashboard-view=\"map\"]) { overflow: clip !important; height: 100% !important; }\n  html body.dashboard-body[data-dashboard-view=\"map\"] { overflow: clip !important; height: 100vh !important; min-height: 0 !important; }\n  html body.dashboard-body[data-dashboard-view=\"map\"] .dashboard-shell { margin: 0 !important; padding: 0 !important; }\n  html body.dashboard-body[data-dashboard-view=\"map\"] .map-card,\n  html body.dashboard-body[data-dashboard-view=\"map\"] .map-card-body,\n  html body.dashboard-body[data-dashboard-view=\"map\"] #mapWrap,\n  html body.dashboard-body[data-dashboard-view=\"map\"] #map {\n    height: calc(100vh - var(--rd-map-top, 81px)) !important; max-height: none !important; min-height: 0 !important;\n    border-radius: 0 !important;\n  }\n}\n\n/* ---------- top bar show/hide arrow ---------- */\nbody.rd-hide-header .app-header { display: none !important; }\n.rd-header-toggle {\n  position: fixed; left: 50%; top: var(--rd-header-h, 50px); transform: translateX(-50%); z-index: 9500;\n  width: 44px; height: 18px; padding: 0; display: grid; place-items: center; cursor: pointer;\n  border: 1px solid var(--rd-panel-line); border-top: 0; border-radius: 0 0 8px 8px;\n  background: var(--rd-panel-bg); color: var(--rd-panel-fg); opacity: .75;\n}\n.rd-header-toggle:hover, .rd-header-toggle:focus-visible { opacity: 1; }\n.rd-header-toggle svg { width: 14px; height: 14px; transition: transform .2s; }\nbody.rd-hide-header .rd-header-toggle { top: 0; }\nbody.rd-hide-header .rd-header-toggle svg { transform: rotate(180deg); }\nbody.rd-tv .rd-header-toggle { display: none; }\n\n:root {\n  --rd-panel-bg: rgba(7, 20, 38, .94);\n  --rd-panel-fg: #e5edf7;\n  --rd-panel-muted: #94a3b8;\n  --rd-panel-line: rgba(148, 163, 184, .22);\n}\nbody.light-mode {\n  --rd-panel-bg: rgba(255, 255, 255, .96);\n  --rd-panel-fg: #0f1d33;\n  --rd-panel-muted: #55657d;\n  --rd-panel-line: rgba(15, 29, 51, .14);\n}\n\n/* ---------- last-changed badges ---------- */\n.rd-badge-wrap { background: none !important; border: 0 !important; width: 0 !important; height: 0 !important; }\n.rd-badge {\n  position: absolute; transform: translate(-50%, -50%);\n  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;\n  padding: 2px 7px; border-radius: 999px;\n  font: 800 10.5px/1.5 Montserrat, system-ui, sans-serif; letter-spacing: .02em;\n  background: #fde047; color: #111827; border: 1px solid rgba(0, 0, 0, .35);\n  box-shadow: 0 2px 6px rgba(0, 0, 0, .35);\n  opacity: var(--rd-age, 1); pointer-events: none;\n}\n.rd-badge span { font-weight: 600; opacity: .72; }\n.rd-badge.is-lead-change { background: #fff; outline: 2px solid #f43f5e; }\n.rd-badge.is-fresh { animation: rd-pulse 1.3s ease-out infinite; }\n@keyframes rd-pulse {\n  0% { box-shadow: 0 0 0 0 rgba(253, 224, 71, .85); }\n  100% { box-shadow: 0 0 0 14px rgba(253, 224, 71, 0); }\n}\n\n/* ---------- bottom-right stack: overhang notice, pinned electorates, key ---------- */\n.rd-dock {\n  position: absolute; right: 84px; bottom: 10px; z-index: 825;\n  display: flex; flex-direction: column; align-items: flex-end; gap: 6px;\n  max-width: min(560px, calc(100% - 120px)); pointer-events: none;\n}\n.rd-dock > * { pointer-events: auto; }\n.rd-dock > [hidden] { display: none !important; }\n/* Stacked layout: the results sheet covers the bottom of the map, so sit at the top instead. */\n@media (max-width: 900px) {\n  .rd-dock { top: 52px; bottom: auto; left: 8px; right: 84px; max-width: none; flex-direction: column-reverse; align-items: flex-start; }\n}\nbody.rd-tv .rd-dock { right: 12px; }\n\n/* ---------- pinned electorates ---------- */\n.rd-pins { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }\n.rd-pin-chip {\n  display: inline-flex; align-items: stretch; padding: 0 3px 0 0;\n  background: var(--rd-panel-bg); color: var(--rd-panel-fg); border: 1px solid var(--rd-panel-line);\n  font: 600 11.5px/1.2 Montserrat, system-ui, sans-serif; white-space: nowrap;\n  box-shadow: 0 4px 12px rgba(0, 0, 0, .25);\n}\n.rd-pin-chip:hover { border-color: var(--rd-panel-muted); }\n.rd-pin-open {\n  display: inline-flex; align-items: center; gap: 6px; padding: 4px 2px 4px 0; margin: 0;\n  border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left;\n}\n.rd-pin-bar { align-self: stretch; width: 5px; background: var(--c, #64748b); }\n.rd-pin-bar.is-flip { background: repeating-linear-gradient(-45deg, var(--c) 0 3px, rgba(10, 14, 24, .7) 3px 5px); }\n.rd-pin-chip b { font-weight: 800; }\n.rd-pin-chip .rd-pin-lead { color: var(--rd-panel-muted); font-weight: 700; }\n.rd-pin-chip .rd-pin-pct { color: var(--rd-panel-muted); font-size: 10.5px; }\n.rd-pin-x {\n  display: grid; place-items: center; align-self: center; width: 18px; height: 18px; margin-left: 2px; padding: 0;\n  border: 0; border-radius: 3px; background: transparent; cursor: pointer;\n  color: var(--rd-panel-muted); font: 400 14px/1 system-ui, sans-serif;\n}\n.rd-pin-x:hover { background: rgba(148, 163, 184, .2); color: var(--rd-panel-fg); }\n@media (max-width: 900px) { .rd-pins { justify-content: flex-start; } }\n\n/* pin toggle in the electorate panel header */\n.rd-pin-btn {\n  display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 6px; padding: 0;\n  vertical-align: middle; border: 0; border-radius: 4px; background: transparent; cursor: pointer;\n  color: inherit; opacity: .35; transition: opacity .15s, color .15s;\n}\n.rd-pin-btn svg { width: 15px; height: 15px; }\n.popup-header:hover .rd-pin-btn, .rd-pin-btn:focus-visible { opacity: .75; }\n.rd-pin-btn:hover { opacity: 1; background: rgba(148, 163, 184, .16); }\n.rd-pin-btn.is-pinned { opacity: 1; color: #fde047; }\n.rd-pin-btn.is-pinned svg { fill: currentColor; }\n\n/* ---------- margin legend ---------- */\n.rd-legend {\n  position: static;\n  display: flex; align-items: center; gap: 4px; padding: 5px 9px;\n  background: var(--rd-panel-bg); color: var(--rd-panel-fg); border: 1px solid var(--rd-panel-line);\n  font: 600 11px Montserrat, system-ui, sans-serif; white-space: nowrap;\n}\n.rd-legend small { margin-right: 5px; color: var(--rd-panel-muted); font-size: 10.5px; }\n/* --rd-key = colour of the currently leading party (set by extras.js); blue until results arrive */\n.rd-legend .rd-sw { width: 14px; height: 11px; background: var(--rd-key, #3b82f6); transition: background .4s; }\n.rd-legend .rd-sw-hatch { opacity: .9; background: repeating-linear-gradient(-45deg, var(--rd-key, #3b82f6) 0 4px, rgba(10, 14, 24, .75) 4px 7px); }\n.rd-legend-toggle {\n  margin-right: 6px; padding: 2px 7px; border: 1px solid var(--rd-panel-line); background: transparent;\n  color: inherit; font: 800 10.5px Montserrat, system-ui, sans-serif; text-transform: uppercase; cursor: pointer;\n}\n.rd-legend.is-off .rd-sw:not(.rd-sw-hatch) { opacity: .85 !important; filter: grayscale(1); }\n.rd-legend.is-off .rd-legend-toggle { text-decoration: line-through; }\n@media (max-width: 900px) { .rd-legend small { display: none; } }\n\n/* ---------- coalition tracker ---------- */\n.rd-coal-btn.active { color: #fde047 !important; }\n.rd-coalition {\n  position: absolute; top: 12px; right: 84px; z-index: 830; width: 330px; max-height: calc(100% - 70px); overflow: auto;\n  padding: 12px; background: var(--rd-panel-bg); color: var(--rd-panel-fg); border: 1px solid var(--rd-panel-line);\n  font: 500 12.5px/1.4 Montserrat, system-ui, sans-serif; box-shadow: 0 10px 30px rgba(0, 0, 0, .35);\n}\n.rd-coalition[hidden] { display: none; }\n.rd-coal-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }\n.rd-coal-head strong { font-weight: 800; font-size: 14px; }\n.rd-coal-head span { color: var(--rd-panel-muted); font-size: 11.5px; }\n.rd-bloc-bar { position: relative; display: flex; height: 14px; background: rgba(148, 163, 184, .2); overflow: visible; }\n.rd-bloc-bar span { height: 100%; }\n.rd-bloc-bar i { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--rd-panel-fg); }\n.rd-verdict { margin: 8px 0 10px; font-size: 12px; }\n.rd-bloc { padding: 7px 0; border-top: 1px solid var(--rd-panel-line); }\n.rd-bloc-head { display: flex; align-items: center; gap: 7px; font-weight: 700; }\n.rd-bloc-head strong { margin-left: auto; font-size: 18px; font-weight: 900; }\n.rd-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; display: inline-block; }\n.rd-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }\n.rd-chip { padding: 1px 6px; border-left: 4px solid var(--c); background: rgba(148, 163, 184, .14); font-size: 11.5px; font-weight: 700; }\n.rd-spark-label { margin-top: 8px; color: var(--rd-panel-muted); font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }\n.rd-spark { display: block; width: 100%; height: 70px; margin-top: 4px; color: var(--rd-panel-muted); }\n.rd-spark-empty { color: var(--rd-panel-muted); font-size: 11.5px; margin-top: 4px; }\n@media (max-width: 760px) { .rd-coalition { right: 8px; left: 8px; width: auto; top: 8px; } }\n\n/* ---------- overhang notice ---------- */\n.rd-overhang {\n  max-width: 460px;\n  padding: 7px 12px; background: #fef3c7; color: #422006; border: 1px solid #f59e0b;\n  font: 500 12.5px/1.45 Montserrat, system-ui, sans-serif; box-shadow: 0 6px 18px rgba(0, 0, 0, .25);\n}\n.rd-overhang[hidden] { display: none; }\n@media (max-width: 900px) { .rd-overhang { max-width: none; font-size: 11.5px; } }\n\n/* ---------- sitting MP in electorate panel ---------- */\n.rd-held {\n  grid-column: 1; /* the panel header is a 2-column grid; stay under the title, left of the % box */\n  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px; margin-top: 6px;\n  font: 600 12px/1.3 Montserrat, system-ui, sans-serif; color: inherit;\n}\n.rd-held-label { font-size: 9.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; opacity: .6; }\n.rd-held-name { font-weight: 800; }\n.rd-held-party { padding: 1px 6px; border-left: 4px solid var(--c); background: rgba(148, 163, 184, .16); font-size: 10.5px; font-weight: 800; text-transform: uppercase; }\n.rd-held-was, .rd-held-new { opacity: .7; font-size: 11px; }\n\n/* ---------- TV mode ---------- */\n.rd-tv-btn { display: inline-flex !important; align-items: center; gap: 6px; }\n.rd-tv-panel { display: none; }\nbody.rd-tv { overflow: hidden !important; }\n/* .rd-tv repeated to outrank the site's own body.dashboard-body[data-dashboard-view] rules */\nbody.rd-tv.rd-tv.rd-tv #mapWrap {\n  position: fixed !important; inset: 0 31vw 0 0 !important; width: auto !important; height: auto !important;\n  z-index: 9000 !important; margin: 0 !important; background: #050b16; display: block !important;\n}\nbody.rd-tv.rd-tv.rd-tv #map { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; display: block !important; }\nbody.rd-tv.rd-tv.rd-tv #mapWrap > :not(#map):not(.rd-dock):not(.map-stage-texture):not(#featurePopup) { display: none !important; }\nbody.rd-tv .rd-coalition, body.rd-tv #rdOverhang { display: none !important; }\nbody.rd-tv .rd-legend { font-size: 13px; }\nbody.rd-tv .rd-pin-chip { font-size: 14px; }\nbody.rd-tv .rd-badge { font-size: 13px; }\nbody.rd-tv .rd-tv-panel {\n  display: flex; flex-direction: column; gap: 1.2vh;\n  position: fixed; top: 0; right: 0; bottom: 0; width: 31vw; z-index: 9001; overflow: hidden;\n  padding: 2.4vh 1.8vw; background: #071426; color: #e5edf7; border-left: 1px solid rgba(148, 163, 184, .2);\n  font: 500 clamp(13px, 1.05vw, 22px)/1.35 Montserrat, system-ui, sans-serif;\n}\n.rd-tv-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }\n.rd-tv-title { font-weight: 900; font-size: 1.9em; letter-spacing: -.01em; }\n.rd-tv-sub { color: #94a3b8; }\n.rd-tv-actions { display: flex; gap: 6px; }\n.rd-tv-actions button { white-space: nowrap; padding: .3em .7em; border: 1px solid rgba(148, 163, 184, .35); background: transparent; color: inherit; font: 700 .8em Montserrat, sans-serif; cursor: pointer; }\n.rd-tv-seats { display: grid; gap: .55vh; }\n.rd-tv-row { display: grid; grid-template-columns: 8.5em 1fr 2.4em; align-items: center; gap: .6em; font-weight: 700; }\n.rd-tv-row strong { text-align: right; font-size: 1.45em; font-weight: 900; }\n.rd-tv-row sup { color: #f59e0b; }\n.rd-tv-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.rd-tv-bar { height: 1.15em; background: rgba(148, 163, 184, .12); }\n.rd-tv-bar i { display: block; height: 100%; }\n.rd-tv-coal { padding-top: 1vh; border-top: 1px solid rgba(148, 163, 184, .2); }\n.rd-tv-coal-head { margin-bottom: .5em; color: #94a3b8; }\n.rd-tv-coal .rd-bloc-bar { height: 1.3em; }\n.rd-tv-coal .rd-bloc-bar i { background: #fff; }\n.rd-tv-blocs { display: grid; gap: .2em; margin-top: .6em; }\n.rd-tv-blocs span { display: flex; align-items: center; gap: .5em; }\n.rd-tv-blocs i { width: .8em; height: .8em; border-radius: 50%; }\n.rd-tv-blocs b { margin-left: auto; font-size: 1.25em; }\n.rd-tv-overhang { position: static; transform: none; max-width: none; font-size: .9em; }\n.rd-tv-ticker-label { padding-top: 1vh; border-top: 1px solid rgba(148, 163, 184, .2); color: #94a3b8; font-size: .78em; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }\n.rd-ticker { display: grid; gap: .45em; min-height: 0; overflow: hidden; }\n.rd-ticker-item { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: .55em; font-size: .92em; }\n.rd-ticker-item span:not(.rd-dot) { color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.rd-ticker-item small { color: #94a3b8; }\n.rd-ticker-item.is-lead-change b { color: #fda4af; }\n@media (max-width: 900px) {\n  body.rd-tv #mapWrap { inset: 0 0 46vh 0 !important; }\n  body.rd-tv .rd-tv-panel { top: 54vh; width: 100%; border-left: 0; overflow: auto; }\n}\n";
     (document.head || document.documentElement).appendChild(style);
   }
   if (document.head) addStyles();
@@ -240,6 +240,7 @@ function rdInstallCore() {
     }
     renderBadges();
     renderTicker();
+    renderPins();
   }
 
   function renderBadges() {
@@ -280,9 +281,32 @@ function rdInstallCore() {
   // 2. Margin legend (shading itself is in the patched map styles)
   // ---------------------------------------------------------------------------
   window.rdMarginShading = store.get('rd-margin-shading', true);
-  function buildLegend() {
+
+  // Bottom-right stack on the map, top to bottom: overhang notice, pinned electorates, key.
+  // One container so they never overlap; CSS flips it to the top-left on stacked layouts.
+  function ensureDock() {
     const wrap = $('#mapWrap');
-    if (!wrap || $('#rdLegend')) return;
+    if (!wrap) return null;
+    let dock = $('#rdDock');
+    if (!dock) {
+      dock = el('div', 'rd-dock');
+      dock.id = 'rdDock';
+      wrap.appendChild(dock);
+    }
+    const slot = (id, cls) => {
+      let n = document.getElementById(id);
+      if (!n) { n = el('div', cls); n.id = id; n.hidden = true; }
+      return n;
+    };
+    const order = [slot('rdOverhang', 'rd-overhang'), slot('rdPins', 'rd-pins'), $('#rdLegend')].filter(Boolean);
+    order.forEach((n, i) => { if (dock.children[i] !== n) dock.insertBefore(n, dock.children[i] || null); });
+    return dock;
+  }
+
+  function buildLegend() {
+    const dock = ensureDock();
+    if (!dock || $('#rdLegend')) return;
+    const wrap = dock;
     const lg = el('div', 'rd-legend');
     lg.id = 'rdLegend';
     lg.innerHTML = `
@@ -406,12 +430,7 @@ function rdInstallCore() {
       p.hidden = !coalOpen;
       wrap.appendChild(p);
     }
-    if (!$('#rdOverhang')) {
-      const o = el('div', 'rd-overhang');
-      o.id = 'rdOverhang';
-      o.hidden = true;
-      wrap.appendChild(o);
-    }
+    ensureDock(); // creates #rdOverhang and #rdPins in the bottom-right stack
     // Rail button (the rail is rebuilt by the app now and then, so re-add when missing).
     const dock = $('#mapMagicWallControlsRail .map-icon-dock');
     if (dock && !dock.querySelector('[data-map-icon="rdCoalition"]')) {
@@ -440,6 +459,7 @@ function rdInstallCore() {
     ensureCoalitionUi();
     const st = seatState();
     updateKeyColour(st);
+    renderPins();
     const hist = recordHistory(st);
     const p = $('#rdCoalition');
     if (p && !p.hidden) p.innerHTML = st.total ? coalitionHtml(st, hist) : '<div class="rd-coal-head"><strong>Coalition tracker</strong></div><div class="rd-verdict">Waiting for seat results…</div>';
@@ -618,6 +638,111 @@ function rdInstallCore() {
   }
 
   // ---------------------------------------------------------------------------
+  // 11. Pinned electorates: a faint pin icon beside the name in the electorate panel;
+  // pinned seats show as small chips above the key (leader colour, margin, % counted).
+  // Nothing extra appears until something is pinned. Remembered between visits.
+  // ---------------------------------------------------------------------------
+  const PIN_MAX = 6;
+  let pins = store.get('rd-pins', []);
+  const PIN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
+
+  // Every electorate's latest row, General and Māori, whichever map layer is showing.
+  function allRows() {
+    const out = [];
+    try {
+      for (const kind of ['General', 'Maori']) {
+        const rows = cachedResultsRows?.[`${ds()}:${kind}:results`];
+        if (Array.isArray(rows)) rows.forEach(row => out.push({ row, kind }));
+      }
+    } catch { /* not loaded yet */ }
+    return out;
+  }
+  function rowByName(name) {
+    const live = liveByName(name); // the map's own copy carries previous-winner data for flips
+    if (live) return live;
+    return allRows().find(x => x.row.electorate_name === name)?.row || null;
+  }
+  const isPinnable = name => !!name && !!(HELD_BY[name] || rowByName(name));
+
+  function pinChipHtml(name) {
+    const r = rowByName(name);
+    const pv = (() => { try { return currentViewMode === 'partyvote'; } catch { return false; } })();
+    const lead = r && (pv ? r.party_vote_leader_party : r.leader_party);
+    const leadVotes = Number(r && (pv ? r.party_vote_leader_votes : r.leader_votes)) || 0;
+    const margin = Number(r && (pv ? r.party_vote_margin_votes : r.margin_votes)) || 0;
+    const has = lead && lead !== 'Unknown' && leadVotes > 0;
+    const total = Number(r?.voting_places_total) || 0;
+    const pct = total > 0 ? (Number(r.voting_places_counted) || 0) / total * 100 : (r ? Number(r.reporting_pct) || 0 : null);
+    let flip = false;
+    try { flip = has && getMapDataResultStatus(r) === 'flipped'; } catch { /* no comparison data */ }
+    return `<div class="rd-pin-chip">
+      <button type="button" class="rd-pin-open" data-pin="${esc(name)}" title="Open ${esc(name)}">
+        <span class="rd-pin-bar${flip ? ' is-flip' : ''}" style="--c:${has ? partyColor(lead) : '#64748b'}"></span>
+        <b>${esc(name)}</b>
+        <span class="rd-pin-lead">${has ? `${esc(partyLabel(lead))} +${fmt(margin)}` : 'no votes yet'}</span>
+        ${pct == null ? '' : `<span class="rd-pin-pct">${pct.toFixed(0)}%</span>`}
+      </button>
+      <button type="button" class="rd-pin-x" data-unpin="${esc(name)}" title="Unpin" aria-label="Unpin ${esc(name)}">×</button>
+    </div>`;
+  }
+
+  function renderPins() {
+    ensureDock();
+    const box = $('#rdPins');
+    if (!box) return;
+    box.hidden = !pins.length;
+    const html = pins.map(pinChipHtml).join('');
+    if (box.innerHTML !== html) box.innerHTML = html;
+  }
+
+  function togglePin(name) {
+    pins = pins.includes(name) ? pins.filter(n => n !== name) : [...pins, name].slice(-PIN_MAX);
+    store.set('rd-pins', pins);
+    renderPins();
+    decoratePinButtons();
+  }
+
+  async function openElectorate(name) {
+    const find = () => { let hit = null; try { geoJsonLayer.eachLayer(l => { if (l.feature?.properties?.live?.electorate_name === name) hit = l; }); } catch { /* no map */ } return hit; };
+    let layer = find();
+    if (!layer) { // pinned seat is on the other layer (General vs Māori): switch, then wait for it
+      const kind = allRows().find(x => x.row.electorate_name === name)?.kind;
+      document.getElementById(kind === 'Maori' ? 'maoriBtnMap' : 'generalBtnMap')?.click();
+      for (let i = 0; i < 40 && !(layer = find()); i++) await new Promise(r => setTimeout(r, 100));
+    }
+    if (layer) layer.fire('click', { latlng: layer.getCenter(), originalEvent: new MouseEvent('click') });
+  }
+
+  function decoratePinButtons() {
+    document.querySelectorAll('.popup-header h3').forEach(h3 => {
+      const name = h3.textContent.trim();
+      let b = h3.querySelector('.rd-pin-btn');
+      if (!isPinnable(name)) { b?.remove(); return; }
+      if (!b) {
+        b = el('button', 'rd-pin-btn', PIN_SVG);
+        b.type = 'button';
+        b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); togglePin(b.dataset.for); });
+        h3.appendChild(b);
+      }
+      const on = pins.includes(name);
+      if (b.dataset.for !== name || b.classList.contains('is-pinned') !== on) {
+        b.dataset.for = name;
+        b.classList.toggle('is-pinned', on);
+        b.title = on ? `Unpin ${name}` : `Pin ${name}`;
+        b.setAttribute('aria-label', b.title);
+        b.setAttribute('aria-pressed', String(on));
+      }
+    });
+  }
+
+  document.addEventListener('click', e => {
+    const x = e.target.closest?.('.rd-pin-x');
+    if (x) { e.preventDefault(); togglePin(x.dataset.unpin); return; }
+    const open = e.target.closest?.('.rd-pin-open');
+    if (open) { e.preventDefault(); openElectorate(open.dataset.pin); }
+  });
+
+  // ---------------------------------------------------------------------------
   // 7. Rebrand: "ResultsDesk" -> BRAND in visible text, tab title, labels and logo.
   // The footer design credit to ResultsDesk.nz is left as-is.
   // ---------------------------------------------------------------------------
@@ -764,7 +889,9 @@ function rdInstallCore() {
     renderSeatsUi();
     scanChanges();
     decorateHeldBy();
-    new MutationObserver(() => { ensureCoalitionUi(); tvButton(); buildLegend(); decorateHeldBy(); headerToggle(); })
+    decoratePinButtons();
+    renderPins();
+    new MutationObserver(() => { ensureCoalitionUi(); tvButton(); buildLegend(); decorateHeldBy(); decoratePinButtons(); headerToggle(); })
       .observe(document.body, { childList: true, subtree: true });
   }
 
@@ -784,7 +911,7 @@ function rdInstallCore() {
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
-      console.log('[ResultsDesk Plus] active v' + '1.4.0' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      console.log('[ResultsDesk Plus] active v' + '1.5.0' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 900) {
       setTimeout(whenReady, 100);
     } else {
@@ -800,7 +927,7 @@ const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
 if (!sandboxed) {
   rdPlusMain();
 } else {
-  console.log('[ResultsDesk Plus] v1.4.0 in Firefox sandbox, moving into the page…');
+  console.log('[ResultsDesk Plus] v1.5.0 in Firefox sandbox, moving into the page…');
   const s = document.createElement('script');
   s.textContent = '(' + rdPlusMain.toString() + ')();';
   (document.head || document.documentElement).appendChild(s);

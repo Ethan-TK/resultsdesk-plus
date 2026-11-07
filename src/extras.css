@@ -21,15 +21,20 @@ body.dashboard-body .dashboard-footer { display: none !important; }
    --rd-map-top is the map's top edge, kept up to date by extras.js. */
 html, body { overscroll-behavior: none; }
 @media (min-width: 901px) {
-  html:has(body.dashboard-body[data-dashboard-view="map"]) { overflow: clip !important; height: 100% !important; }
-  html body.dashboard-body[data-dashboard-view="map"] { overflow: clip !important; height: 100vh !important; min-height: 0 !important; }
-  html body.dashboard-body[data-dashboard-view="map"] .dashboard-shell {
-    width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important;
+  /* Edge to edge on every tab (Map, Electorates, Trends). The [data-dashboard-view] attribute
+     selector matches the site's own per-view rules so ours win. */
+  html body.dashboard-body[data-dashboard-view] .dashboard-shell {
+    width: 100% !important; max-width: none !important; margin-left: 0 !important; margin-right: 0 !important;
+    padding-left: 0 !important; padding-right: 0 !important;
   }
-  html body.dashboard-body[data-dashboard-view="map"] .app-header-inner {
+  html body.dashboard-body[data-dashboard-view] .app-header-inner {
     width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 16px !important;
   }
-  html body.dashboard-body[data-dashboard-view="map"] .dashboard-view-tabs { padding-left: 8px !important; }
+  html body.dashboard-body[data-dashboard-view] .dashboard-view-tabs { padding-left: 8px !important; }
+  /* Map tab only: exact window height, no page scroll. */
+  html:has(body.dashboard-body[data-dashboard-view="map"]) { overflow: clip !important; height: 100% !important; }
+  html body.dashboard-body[data-dashboard-view="map"] { overflow: clip !important; height: 100vh !important; min-height: 0 !important; }
+  html body.dashboard-body[data-dashboard-view="map"] .dashboard-shell { margin: 0 !important; padding: 0 !important; }
   html body.dashboard-body[data-dashboard-view="map"] .map-card,
   html body.dashboard-body[data-dashboard-view="map"] .map-card-body,
   html body.dashboard-body[data-dashboard-view="map"] #mapWrap,
@@ -85,9 +90,61 @@ body.light-mode {
   100% { box-shadow: 0 0 0 14px rgba(253, 224, 71, 0); }
 }
 
+/* ---------- bottom-right stack: overhang notice, pinned electorates, key ---------- */
+.rd-dock {
+  position: absolute; right: 84px; bottom: 10px; z-index: 825;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+  max-width: min(560px, calc(100% - 120px)); pointer-events: none;
+}
+.rd-dock > * { pointer-events: auto; }
+.rd-dock > [hidden] { display: none !important; }
+/* Stacked layout: the results sheet covers the bottom of the map, so sit at the top instead. */
+@media (max-width: 900px) {
+  .rd-dock { top: 52px; bottom: auto; left: 8px; right: 84px; max-width: none; flex-direction: column-reverse; align-items: flex-start; }
+}
+body.rd-tv .rd-dock { right: 12px; }
+
+/* ---------- pinned electorates ---------- */
+.rd-pins { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.rd-pin-chip {
+  display: inline-flex; align-items: stretch; padding: 0 3px 0 0;
+  background: var(--rd-panel-bg); color: var(--rd-panel-fg); border: 1px solid var(--rd-panel-line);
+  font: 600 11.5px/1.2 Montserrat, system-ui, sans-serif; white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .25);
+}
+.rd-pin-chip:hover { border-color: var(--rd-panel-muted); }
+.rd-pin-open {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 2px 4px 0; margin: 0;
+  border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left;
+}
+.rd-pin-bar { align-self: stretch; width: 5px; background: var(--c, #64748b); }
+.rd-pin-bar.is-flip { background: repeating-linear-gradient(-45deg, var(--c) 0 3px, rgba(10, 14, 24, .7) 3px 5px); }
+.rd-pin-chip b { font-weight: 800; }
+.rd-pin-chip .rd-pin-lead { color: var(--rd-panel-muted); font-weight: 700; }
+.rd-pin-chip .rd-pin-pct { color: var(--rd-panel-muted); font-size: 10.5px; }
+.rd-pin-x {
+  display: grid; place-items: center; align-self: center; width: 18px; height: 18px; margin-left: 2px; padding: 0;
+  border: 0; border-radius: 3px; background: transparent; cursor: pointer;
+  color: var(--rd-panel-muted); font: 400 14px/1 system-ui, sans-serif;
+}
+.rd-pin-x:hover { background: rgba(148, 163, 184, .2); color: var(--rd-panel-fg); }
+@media (max-width: 900px) { .rd-pins { justify-content: flex-start; } }
+
+/* pin toggle in the electorate panel header */
+.rd-pin-btn {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 6px; padding: 0;
+  vertical-align: middle; border: 0; border-radius: 4px; background: transparent; cursor: pointer;
+  color: inherit; opacity: .35; transition: opacity .15s, color .15s;
+}
+.rd-pin-btn svg { width: 15px; height: 15px; }
+.popup-header:hover .rd-pin-btn, .rd-pin-btn:focus-visible { opacity: .75; }
+.rd-pin-btn:hover { opacity: 1; background: rgba(148, 163, 184, .16); }
+.rd-pin-btn.is-pinned { opacity: 1; color: #fde047; }
+.rd-pin-btn.is-pinned svg { fill: currentColor; }
+
 /* ---------- margin legend ---------- */
 .rd-legend {
-  position: absolute; right: 84px; bottom: 10px; z-index: 820;
+  position: static;
   display: flex; align-items: center; gap: 4px; padding: 5px 9px;
   background: var(--rd-panel-bg); color: var(--rd-panel-fg); border: 1px solid var(--rd-panel-line);
   font: 600 11px Montserrat, system-ui, sans-serif; white-space: nowrap;
@@ -102,11 +159,7 @@ body.light-mode {
 }
 .rd-legend.is-off .rd-sw:not(.rd-sw-hatch) { opacity: .85 !important; filter: grayscale(1); }
 .rd-legend.is-off .rd-legend-toggle { text-decoration: line-through; }
-/* Compact layout: the results sheet covers the bottom of the map, so sit at the top instead. */
-@media (max-width: 900px) {
-  .rd-legend { top: 52px; bottom: auto; left: 8px; right: auto; }
-  .rd-legend small { display: none; }
-}
+@media (max-width: 900px) { .rd-legend small { display: none; } }
 
 /* ---------- coalition tracker ---------- */
 .rd-coal-btn.active { color: #fde047 !important; }
@@ -136,12 +189,12 @@ body.light-mode {
 
 /* ---------- overhang notice ---------- */
 .rd-overhang {
-  position: absolute; bottom: 48px; right: 84px; z-index: 825; max-width: min(460px, calc(100% - 120px));
+  max-width: 460px;
   padding: 7px 12px; background: #fef3c7; color: #422006; border: 1px solid #f59e0b;
   font: 500 12.5px/1.45 Montserrat, system-ui, sans-serif; box-shadow: 0 6px 18px rgba(0, 0, 0, .25);
 }
 .rd-overhang[hidden] { display: none; }
-@media (max-width: 900px) { .rd-overhang { top: 88px; bottom: auto; left: 8px; right: 84px; max-width: none; font-size: 11.5px; } }
+@media (max-width: 900px) { .rd-overhang { max-width: none; font-size: 11.5px; } }
 
 /* ---------- sitting MP in electorate panel ---------- */
 .rd-held {
@@ -164,10 +217,10 @@ body.rd-tv.rd-tv.rd-tv #mapWrap {
   z-index: 9000 !important; margin: 0 !important; background: #050b16; display: block !important;
 }
 body.rd-tv.rd-tv.rd-tv #map { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; display: block !important; }
-body.rd-tv.rd-tv.rd-tv #mapWrap > :not(#map):not(.rd-legend):not(.map-stage-texture):not(#featurePopup) { display: none !important; }
+body.rd-tv.rd-tv.rd-tv #mapWrap > :not(#map):not(.rd-dock):not(.map-stage-texture):not(#featurePopup) { display: none !important; }
 body.rd-tv .rd-coalition, body.rd-tv #rdOverhang { display: none !important; }
-body.rd-tv .rd-legend { right: 12px !important; }
 body.rd-tv .rd-legend { font-size: 13px; }
+body.rd-tv .rd-pin-chip { font-size: 14px; }
 body.rd-tv .rd-badge { font-size: 13px; }
 body.rd-tv .rd-tv-panel {
   display: flex; flex-direction: column; gap: 1.2vh;

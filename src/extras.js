@@ -12,13 +12,35 @@
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = n => Number(n || 0).toLocaleString('en-NZ');
   const ds = () => { try { return currentDataset; } catch { return ''; } };
-  // Opportunity: the party's own cyan everywhere (the site shows it purple), and "OPP" in our panels.
+  // Each party's own colour, used everywhere the site colours parties (map, party table, bars) and in
+  // our panels. Opportunity is from its website (opportunity.org.nz primary); the rest are the
+  // colours Wikipedia's party data (Module:Political party) lists for each NZ party.
   const OPP_CYAN = '#00B9BC';
   const isOppParty = p => /OPPORTUNIT/i.test(String(p || ''));
-  if (typeof window.getPartyColor === 'function' && !window.getPartyColor.__rdOpp) {
+  const PARTY_COLOURS = [
+    [/^NATIONAL/i, '#00529F'],
+    [/^LABOUR/i, '#D82A20'],
+    [/^GREEN/i, '#098137'],
+    [/^ACT\b/i, '#FDE401'],
+    [/NZ FIRST|NEW ZEALAND FIRST/i, '#000000'],
+    [/M[AĀ]ORI/i, '#B2001A'],
+    [/OPPORTUNIT/i, OPP_CYAN],
+    [/^ALLIANCE/i, '#33CC66'],
+    [/ANIMAL JUSTICE/i, '#5C558C'],
+    [/LEGALISE CANNABIS/i, '#33CC33'],
+    [/CONSERVATIVE/i, '#00768B'],
+    [/FREE PALESTINE/i, '#228847'],
+    [/LOYAL/i, '#FDB813'],
+    [/OUTDOORS/i, '#008000'],
+    [/TE TAI TOKERAU PARTY/i, '#774D27'],
+    [/^VISION/i, '#095B7E'],
+    [/WOMEN.S RIGHTS/i, '#9C27B0'],
+  ];
+  const ownColour = p => { const s = String(p || ''); const hit = PARTY_COLOURS.find(([re]) => re.test(s)); return hit ? hit[1] : null; };
+  if (typeof window.getPartyColor === 'function' && !window.getPartyColor.__rdColours) {
     const origColor = window.getPartyColor;
-    window.getPartyColor = function (p) { return isOppParty(p) ? OPP_CYAN : origColor.apply(this, arguments); };
-    window.getPartyColor.__rdOpp = true;
+    window.getPartyColor = function (p) { return ownColour(p) || origColor.apply(this, arguments); };
+    window.getPartyColor.__rdColours = true;
   }
   const partyColor = p => { try { return getPartyColor(p); } catch { return '#94a3b8'; } };
   const partyLabel = p => {
@@ -612,20 +634,56 @@
     const list = $('#mapDetailPanel .map-national-results');
     const btn = list?.querySelector('[data-result-expander="map-national"]');
     if (!btn || btn.getAttribute('aria-expanded') === 'true' || Date.now() - partyExpandAt < 800) return;
-    const body = list.querySelector('.candidate-results-body');
-    // Measure the list's natural collapsed height (uncapped), then cap the expanded list at it.
-    const root = document.documentElement.style;
-    root.removeProperty('--rd-party-body-h');
-    const h = Math.round(body?.getBoundingClientRect().height || 0);
-    if (h > 0) root.setProperty('--rd-party-body-h', `${h}px`);
     partyExpandAt = Date.now();
     btn.click();
   }
+
+  // Shrink the party rows (all by the same factor) so every party on 4%+ of the vote fits in the
+  // list without scrolling, whatever the screen size. Smaller parties stay below, scrollable.
+  // Rows never grow, and never shrink below 55% so they stay readable.
+  const PARTY_FIT_THRESHOLD = 0.04;
+  const MIN_ROW_SCALE = 0.55;
+  let naturalRowH = 0, blocBuilderH = 0;
+  function fitPartyRows() {
+    const body = $('#mapDetailPanel .map-national-results > .candidate-results-body');
+    if (!body) return;
+    const rows = [...body.querySelectorAll(':scope > .candidate-result-row')];
+    if (!rows.length) return;
+    // The site's bloc builder below the totals ("Majority … Left Bloc / Right Bloc"). On screens too
+    // short to fit the 4%+ parties even at the smallest row size, it's hidden to make room (the
+    // coalition tracker shows the same thing).
+    const builder = $('#mapDetailPanel .map-national-coalition-popover');
+    const builderShown = !!builder && builder.style.display !== 'none';
+    if (builderShown) blocBuilderH = builder.offsetHeight || blocBuilderH;
+    let scale = 1, hideBuilder = false;
+    if (window.matchMedia('(min-width: 901px)').matches) {
+      const big = (seatRows || []).filter(r => Number(r.vote_pct) > PARTY_FIT_THRESHOLD).length;
+      if (!naturalRowH) {
+        const prev = rows[0].style.zoom;
+        rows[0].style.zoom = '';
+        naturalRowH = rows[0].getBoundingClientRect().height || 0;
+        rows[0].style.zoom = prev;
+      }
+      const availWith = builderShown ? body.clientHeight : body.clientHeight - blocBuilderH;
+      const availWithout = builderShown ? body.clientHeight + blocBuilderH : body.clientHeight;
+      const need = big * naturalRowH;
+      if (big > 0 && naturalRowH > 0) {
+        hideBuilder = !!builder && availWith < need * MIN_ROW_SCALE;
+        const avail = hideBuilder ? availWithout : availWith;
+        if (avail > 0) scale = Math.max(MIN_ROW_SCALE, Math.min(1, (avail - 4) / need)); // 4px slack for rounding
+      }
+    }
+    if (builder) { const d = hideBuilder ? 'none' : ''; if (builder.style.display !== d) builder.style.display = d; }
+    const z = scale >= 0.995 ? '' : scale.toFixed(3);
+    for (const r of rows) if (r.style.zoom !== z) r.style.zoom = z;
+  }
+  window.addEventListener('resize', () => setTimeout(fitPartyRows, 100));
 
   // ---------------------------------------------------------------------------
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['1.9.0', ['Every party uses its own colour.', 'The party list reaches further down, and rows shrink so every party on 4% or more fits without scrolling.', 'On short screens the bloc builder under the totals is hidden to make room.']],
     ['1.8.5', ['Coalition tracker: OPP sits between the two blocs, in Opportunity’s cyan.', 'Opportunity shows in cyan across the site.', 'Removed the Coalition button from TV mode.']],
     ['1.8.4', ['Removed the update badges from the map (they covered it once results started).']],
     ['1.8.3', ['TV mode: Coalition button in the top-left corner shows the coalition tracker there.']],
@@ -1051,8 +1109,12 @@
     decoratePinButtons();
     renderPins();
     expandPartyList();
+    fitPartyRows();
+    // Repaint once so the party colours apply to anything drawn before the script loaded.
+    try { geoJsonLayer.setStyle(featureStyle); updateSelectedHighlight(); } catch { /* map not drawn yet */ }
+    try { if (Array.isArray(lastSeatSummaryRows) && lastSeatSummaryRows.length) renderSeatSummary(lastSeatSummaryRows); } catch { /* ignore */ }
     ensureResetViewBtn();
-    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); buildLegend(); decorateHeldBy(); decoratePinButtons(); headerToggle(); expandPartyList(); })
+    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); buildLegend(); decorateHeldBy(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); })
       .observe(document.body, { childList: true, subtree: true });
   }
 

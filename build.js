@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 const RAW = 'https://raw.githubusercontent.com/Ethan-TK/resultsdesk-plus/main/resultsdesk-plus.user.js';
 const HOME = 'https://github.com/Ethan-TK/resultsdesk-plus';
 
@@ -22,21 +22,34 @@ const out = `// ==UserScript==
 // @downloadURL  ${RAW}
 // @updateURL    ${RAW}
 // @match        https://resultsdesk.nz/*
-// @run-at       document-end
+// @match        https://www.resultsdesk.nz/*
+// @run-at       document-start
 // @inject-into  page
+// @sandbox      raw
 // @grant        none
 // ==/UserScript==
+//
+// document-start matters: resultsdesk.nz sets a <meta> Content-Security-Policy that blocks
+// injected page scripts once parsed. Starting before it is parsed lets the script run on
+// Firefox and Chrome; it then waits for the app's globals before hooking in.
 
 // Unofficial add-on. Not affiliated with ResultsDesk. Built from ${HOME}/tree/main/src
 
 (() => {
   'use strict';
 
-  // ---- styles ----
-  const style = document.createElement('style');
-  style.id = 'rdPlusStyles';
-  style.textContent = ${JSON.stringify(css)};
-  (document.head || document.documentElement).appendChild(style);
+  console.log('[ResultsDesk Plus] loaded, waiting for the site…');
+
+  // ---- styles (added once <head> exists; at document-start it may not yet) ----
+  function addStyles() {
+    if (document.getElementById('rdPlusStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'rdPlusStyles';
+    style.textContent = ${JSON.stringify(css)};
+    (document.head || document.documentElement).appendChild(style);
+  }
+  if (document.head) addStyles();
+  else document.addEventListener('DOMContentLoaded', addStyles, { once: true });
 
   // ---- core: speed + map styling ----
 ${core}
@@ -50,10 +63,11 @@ ${extras}
   let tries = 0;
   (function whenReady() {
     if (typeof window.refreshMap === 'function' && typeof window.featureStyle === 'function') {
+      addStyles();
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       console.log('[ResultsDesk Plus] active');
-    } else if (++tries < 300) {
+    } else if (++tries < 900) {
       setTimeout(whenReady, 100);
     } else {
       console.warn('[ResultsDesk Plus] app globals not found — site may have changed');

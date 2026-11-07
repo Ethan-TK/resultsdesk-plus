@@ -328,9 +328,12 @@
       return { ...o, paddingTopLeft: [20, 20], paddingBottomRight: [20, 20], maxZoom: Math.max(Number(o.maxZoom) || 0, 6.6) };
     };
   })();
+  // Best fit for the TV-sized map, applied directly (the site's reset waits for animation frames
+  // and can run before the map has resized), then once more after the layout settles.
   function tvFitNz() {
-    try { if (typeof resetMapView === 'function') return resetMapView(); } catch { /* fall back */ }
-    try { map.fitBounds(L.latLngBounds([[-46.8, 166.3], [-34.3, 178.7]]), { padding: [16, 16], animate: false }); } catch { /* ignore */ }
+    const fit = () => { try { map.invalidateSize(false); applyBestView(false); } catch { /* ignore */ } };
+    fit();
+    setTimeout(fit, 600);
   }
 
   function setTv(on) {
@@ -641,7 +644,7 @@
   function bestView() {
     try {
       const m = map.getContainer().getBoundingClientRect();
-      const gap = 10;
+      const gap = document.body.classList.contains('rd-tv') ? 16 : 24; // breathing room at the edges
       let left = gap, right = gap;
       const panel = visibleRect($('#mapDetailPanel'));
       if (panel && panel.left < m.left + m.width / 2) left = Math.max(left, panel.right - m.left + gap);
@@ -655,37 +658,52 @@
         .map(d => ({ l: d.left - m.left - gap, t: d.top - m.top - gap, r: d.right - m.left + gap, b: d.bottom - m.top + gap }));
       const box = boxes.length ? boxes : null;
 
-      const key = [m.width, m.height, left, right, boxes.map(b => [b.l, b.t, b.r, b.b].map(Math.round).join(',')).join(';')].join('|');
+      const key = [m.width, m.height, gap, left, right, boxes.map(b => [b.l, b.t, b.r, b.b].map(Math.round).join(',')).join(';')].join('|');
       if (bestCache.key === key && bestCache.view) return bestCache.view;
 
-      const bounds = L.latLngBounds(NZ_BOUNDS);
-      const padTL = L.point(left, gap), padBR = L.point(right, gap);
-      const fit = map._getBoundsCenterZoom(bounds, { paddingTopLeft: padTL, paddingBottomRight: padBR });
-      if (!fit || !Number.isFinite(fit.zoom)) return null;
-      let view = fit;
-      const pts = box ? landPoints() : [];
-      if (box && pts.length) {
-        // Same centring Leaflet uses for a padded fit, at a given zoom.
-        const centerAt = z => {
-          const sw = map.project(bounds.getSouthWest(), z), ne = map.project(bounds.getNorthEast(), z);
-          return map.unproject(sw.add(ne).divideBy(2).add(padBR.subtract(padTL).divideBy(2)), z);
-        };
-        const size = map.getSize();
-        const covers = (c, z) => {
-          const o = map.project(c, z).subtract(size.divideBy(2));
-          for (const p of pts) {
-            const q = map.project(p, z).subtract(o);
-            for (const bx of box) if (q.x > bx.l && q.x < bx.r && q.y > bx.t && q.y < bx.b) return true;
+      // Fit the actual coastline (falls back to the NZ box before the shapes load) into the free
+      // area. For each zoom from the largest down, try placing NZ at several spots within the
+      // spare room (centred first) and take the first that keeps land off the key/notice.
+      const W = m.width, H = m.height;
+      const free = { l: left, r: W - right, t: gap, b: H - gap };
+      const fw = free.r - free.l, fh = free.b - free.t;
+      if (fw < 60 || fh < 60) return null;
+      let pts = landPoints();
+      const haveShapes = pts.length > 0;
+      if (!haveShapes) { const nb = L.latLngBounds(NZ_BOUNDS); pts = [nb.getNorthWest(), nb.getNorthEast(), nb.getSouthWest(), nb.getSouthEast()]; }
+      const p0 = pts.map(p => map.project(p, 0)); // Web Mercator: pixels at zoom z = pixels at 0 × 2^z
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const p of p0) { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+      const w0 = maxX - minX, h0 = maxY - minY;
+      const snap = map.options.zoomSnap || 0.05;
+      const rz = z => Math.round(z / snap) * snap;
+      const maxZ = Number.isFinite(map.getMaxZoom()) ? map.getMaxZoom() : 18; // the site sets no max (null)
+      const minZ = Number.isFinite(map.getMinZoom()) ? map.getMinZoom() : 0;
+      const zFit = Math.min(maxZ, Math.floor(Math.log2(Math.min(fw / w0, fh / h0)) / snap + 1e-9) * snap);
+      if (!(zFit >= minZ)) return null;
+      const fracs = [0.5, 0.35, 0.65, 0.2, 0.8, 0, 1];
+      const spots = fracs.flatMap(fx => fracs.map(fy => [fx, fy])).sort((a, b) => (Math.abs(a[0] - 0.5) + Math.abs(a[1] - 0.5)) - (Math.abs(b[0] - 0.5) + Math.abs(b[1] - 0.5)));
+      let view = null;
+      outer:
+      for (let z = rz(zFit); z >= Math.max(minZ, zFit - 3); z = rz(z - snap)) {
+        const s = Math.pow(2, z);
+        const sx = fw - w0 * s, sy = fh - h0 * s;
+        if (sx < -0.5 || sy < -0.5) continue;
+        for (const [fx, fy] of spots) {
+          const ox = minX * s - (free.l + fx * Math.max(0, sx)), oy = minY * s - (free.t + fy * Math.max(0, sy));
+          let hit = false;
+          if (boxes.length && haveShapes) {
+            for (const p of p0) {
+              const qx = p.x * s - ox, qy = p.y * s - oy;
+              for (const bx of boxes) if (qx > bx.l && qx < bx.r && qy > bx.t && qy < bx.b) { hit = true; break; }
+              if (hit) break;
+            }
           }
-          return false;
-        };
-        const snap = map.options.zoomSnap || 0.05;
-        for (let z = fit.zoom; z >= fit.zoom - 3; z = Math.round((z - snap) / snap) * snap) {
-          const c = z === fit.zoom ? fit.center : centerAt(z);
-          if (!covers(c, z)) { view = { center: c, zoom: z }; break; }
+          if (!hit) { view = { center: map.unproject(L.point(ox + W / 2, oy + H / 2), z), zoom: z }; break outer; }
+          if (!boxes.length) break; // nothing to dodge: centred is best
         }
       }
-      if (!box || pts.length) bestCache = { key, view }; // don't cache a fit made before the shapes loaded
+      if (view && haveShapes) bestCache = { key, view }; // don't cache a fit made before the shapes loaded
       return view;
     } catch { return null; }
   }

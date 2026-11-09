@@ -9,9 +9,13 @@ function rdInstallCore() {
   const realFetch = window.fetch.bind(window);
   // National statistics from the Electoral Commission XML inside the results bundle
   // (the site doesn't show these): special votes still to count, votes cast, turnout so far.
+  let nationalTag = null;
   function captureNational(res) {
     if (!res || !res.ok) return;
+    const tag = res.headers.get('etag') || res.headers.get('last-modified');
+    if (tag && tag === nationalTag && window.__rdNational) return; // same file as last time
     res.clone().json().then(j => {
+      nationalTag = tag;
       const x = j && j.election;
       if (typeof x !== 'string') return;
       const num = t => { const m = x.match(new RegExp('<' + t + '>([^<]*)</' + t + '>')); return m && m[1].trim() !== '' ? Number(m[1]) : null; };
@@ -48,19 +52,21 @@ function rdInstallCore() {
     };
   }
 
-  // Fallback poll every 5 s on live datasets (was 30 s).
+  // The watcher below notices new data within a second using a tiny request, so the full
+  // download only needs to repeat as a safety net (the site's own 30 s). If the watcher can't
+  // work (no ETag from the server), fall back to a full download every 5 s.
+  let lastTag = null, lastUrl = null, busyRetry = null, watchOk = false, watchFails = 0;
   const origInterval = window.getRefreshIntervalMs;
   if (typeof origInterval === 'function') {
     window.getRefreshIntervalMs = function (ds) {
       const v = origInterval.apply(this, arguments);
-      try { if (!PERF.refreshMs && v > 5000 && isLive(ds === undefined ? currentDataset : ds)) return 5000; } catch { /* keep */ }
+      try { if (!watchOk && !PERF.refreshMs && v > 5000 && isLive(ds === undefined ? currentDataset : ds)) return 5000; } catch { /* keep */ }
       return v;
     };
     try { if (isLive(currentDataset)) startAutoRefreshTimer(currentDataset); } catch { /* app not ready */ }
   }
 
   // Watch the live bundle with a cheap HEAD request every second; redraw the moment it changes.
-  let lastTag = null, lastUrl = null, busyRetry = null;
   function liveBundleUrl() {
     try {
       const u = DATASETS[currentDataset]?.resultsBundleUrl;
@@ -75,19 +81,33 @@ function rdInstallCore() {
       .then(r => { if (r && r.status === 'busy') busyRetry = setTimeout(refreshNow, 300); })
       .catch(() => {});
   }
+  function setWatchOk(ok) {
+    if (ok === watchOk) return;
+    watchOk = ok;
+    try { if (isLive(currentDataset)) startAutoRefreshTimer(currentDataset); } catch { /* app not ready */ } // pick up the new interval
+  }
+  let watchBusy = false, watchTick = 0;
   async function watch() {
     const url = liveBundleUrl();
-    if (!url || document.visibilityState === 'hidden') return;
+    if (!url || document.visibilityState === 'hidden' || watchBusy) return;
+    // Once every electorate is final nothing changes minute to minute: check every 5 s instead of 1 s.
+    const final = window.__rdNational && Number(window.__rdNational.finalPct) >= 100;
+    if (final && (++watchTick % 5)) return;
     if (url !== lastUrl) { lastUrl = url; lastTag = null; }
+    watchBusy = true;
     try {
       const res = await realFetch(url + (url.includes('?') ? '&' : '?') + 'h=' + Date.now(), { method: 'HEAD', cache: 'no-store' });
-      const tag = res.headers.get('etag') || res.headers.get('last-modified');
-      if (!tag) return;
+      const tag = res.ok ? (res.headers.get('etag') || res.headers.get('last-modified')) : null;
+      if (!tag) { if (++watchFails >= 3) setWatchOk(false); return; }
+      watchFails = 0;
+      setWatchOk(true);
       if (lastTag !== null && tag !== lastTag) refreshNow();
       lastTag = tag;
-    } catch { /* network blip */ }
+    } catch { if (++watchFails >= 3) setWatchOk(false); }
+    finally { watchBusy = false; }
   }
   setInterval(watch, 1000);
+  watch();
   // The app may have fetched the bundle before these hooks were installed: fetch it once ourselves.
   setTimeout(() => { const u = liveBundleUrl(); if (u && !window.__rdNational) realFetch(u + (u.includes('?') ? '&' : '?') + 'n=' + Date.now(), { cache: 'no-store' }).then(captureNational, () => {}); }, 1500);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && liveBundleUrl()) refreshNow(); });

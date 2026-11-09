@@ -781,6 +781,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.4.0', ['Faster and lighter: the full results file is no longer re-downloaded every 5 seconds (a tiny check still spots new results within a second), the script starts sooner, and it does far less work while the page updates.', 'New design: the arrow that hides and shows the top bar is visible again.']],
     ['2.3.0', ['Results are explained in plain words: the panel opens with who can govern and a seats bar, electorates open with who is winning and by how much, and changes are labelled (pts, seats, votes ahead).', 'Top bar is simpler: the seat scoreboard moved into the results panel.']],
     ['2.2.0', ['Complete redesign (the “New design” switch in the top bar still goes back to the old look): a seat scoreboard in the top bar, a new results panel for the country and each electorate, a new map toolbar, and a new neutral colour scheme and typeface across every tab.', 'The map key no longer shows over the Electorates and Trends tabs.']],
     ['2.0.2', ['Special votes box is shorter (explanation text removed) so the party list has more room.']],
@@ -1578,8 +1579,16 @@
     try { if (Array.isArray(lastSeatSummaryRows) && lastSeatSummaryRows.length) renderSeatSummary(lastSeatSummaryRows); } catch { /* ignore */ }
     ensureResetViewBtn();
     designToggle();
-    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); })
-      .observe(document.body, { childList: true, subtree: true });
+    // The site changes the page many times a second (animated numbers, map redraws). Run our
+    // upkeep at most once per 120 ms: straight away if it has been quiet, otherwise once at the end.
+    const upkeep = () => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); };
+    let upkeepAt = 0, upkeepTimer = null;
+    const runUpkeep = () => { upkeepTimer = null; upkeepAt = Date.now(); try { upkeep(); } catch (err) { console.warn('[ResultsDesk Plus] upkeep', err); } };
+    new MutationObserver(() => {
+      if (upkeepTimer) return;
+      const wait = 120 - (Date.now() - upkeepAt);
+      if (wait <= 0) runUpkeep(); else upkeepTimer = setTimeout(runUpkeep, wait);
+    }).observe(document.body, { childList: true, subtree: true });
   }
 
   if (document.readyState === 'complete') setTimeout(init, 300);

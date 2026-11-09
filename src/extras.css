@@ -478,8 +478,11 @@ body.rd-tv .rd-design-btn { display: none !important; }
   html body.rd-clean .app-header-nav .rd-tv-btn svg, html body.rd-clean .app-header-nav .rd-cl-btn svg { display: block !important; width: 17px !important; height: 17px !important; }
   html body.rd-clean .app-header-nav .rd-design-btn { margin-right: 6px; font-size: 11.5px !important; font-weight: 600 !important; letter-spacing: 0 !important; text-transform: none !important; color: var(--n-muted) !important; }
   html body.rd-clean .rd-design-btn[aria-checked="true"] .rd-switch { background: var(--n-accent); }
-  html body.rd-clean .rd-header-toggle { opacity: 0; }
-  html body.rd-clean .rd-header-toggle:hover, html body.rd-clean .rd-header-toggle:focus-visible, html body.rd-clean.rd-hide-header .rd-header-toggle { opacity: .9; }
+  html body.rd-clean .rd-header-toggle {
+    opacity: 1; width: 46px; height: 18px; border: 1px solid var(--n-line); border-top: 0; border-radius: 0 0 10px 10px;
+    background: var(--n-surface); color: var(--n-muted); box-shadow: none;
+  }
+  html body.rd-clean .rd-header-toggle:hover, html body.rd-clean .rd-header-toggle:focus-visible { color: var(--n-text); background: var(--n-surface-2); }
 
   /* scoreboard */
   html body.rd-clean .rd-score {

@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 const RAW = 'https://raw.githubusercontent.com/Ethan-TK/resultsdesk-plus/main/resultsdesk-plus.user.js';
 const HOME = 'https://github.com/Ethan-TK/resultsdesk-plus';
 
@@ -77,8 +77,8 @@ ${extras}
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
       console.log('[ResultsDesk Plus] active v' + '${VERSION}' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
-    } else if (++tries < 900) {
-      setTimeout(whenReady, 100);
+    } else if (++tries < 3000) {
+      setTimeout(whenReady, 30);
     } else {
       console.warn('[ResultsDesk Plus] app globals not found — site may have changed');
     }

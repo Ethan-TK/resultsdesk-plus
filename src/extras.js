@@ -781,6 +781,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.4.1', ['New design: removed the seats box from the top of the New Zealand panel.']],
     ['2.4.0', ['Faster and lighter: the full results file is no longer re-downloaded every 5 seconds (a tiny check still spots new results within a second), the script starts sooner, and it does far less work while the page updates.', 'New design: the arrow that hides and shows the top bar is visible again.']],
     ['2.3.0', ['Results are explained in plain words: the panel opens with who can govern and a seats bar, electorates open with who is winning and by how much, and changes are labelled (pts, seats, votes ahead).', 'Top bar is simpler: the seat scoreboard moved into the results panel.']],
     ['2.2.0', ['Complete redesign (the “New design” switch in the top bar still goes back to the old look): a seat scoreboard in the top bar, a new results panel for the country and each electorate, a new map toolbar, and a new neutral colour scheme and typeface across every tab.', 'The map key no longer shows over the Electorates and Trends tabs.']],
@@ -1336,7 +1337,6 @@
         <h2>New Zealand</h2>
         ${pct == null ? '' : `<div class="rdn-progress"><i style="width:${Math.min(100, pct).toFixed(1)}%"></i></div>`}
       </header>
-      ${seatsHtml(st)}
       ${specialsRowHtml()}
       <div class="rdn-cols"><span>Party</span><span>Party vote</span><span>Seats</span></div>
       <div class="rdn-list">${list || '<div class="rdn-empty">Waiting for results…</div>'}${moreHtml(rest.length)}</div>

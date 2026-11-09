@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      2.4.0
+// @version      2.4.1
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -997,6 +997,7 @@ function rdInstallCore() {
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.4.1', ['New design: removed the seats box from the top of the New Zealand panel.']],
     ['2.4.0', ['Faster and lighter: the full results file is no longer re-downloaded every 5 seconds (a tiny check still spots new results within a second), the script starts sooner, and it does far less work while the page updates.', 'New design: the arrow that hides and shows the top bar is visible again.']],
     ['2.3.0', ['Results are explained in plain words: the panel opens with who can govern and a seats bar, electorates open with who is winning and by how much, and changes are labelled (pts, seats, votes ahead).', 'Top bar is simpler: the seat scoreboard moved into the results panel.']],
     ['2.2.0', ['Complete redesign (the “New design” switch in the top bar still goes back to the old look): a seat scoreboard in the top bar, a new results panel for the country and each electorate, a new map toolbar, and a new neutral colour scheme and typeface across every tab.', 'The map key no longer shows over the Electorates and Trends tabs.']],
@@ -1552,7 +1553,6 @@ function rdInstallCore() {
         <h2>New Zealand</h2>
         ${pct == null ? '' : `<div class="rdn-progress"><i style="width:${Math.min(100, pct).toFixed(1)}%"></i></div>`}
       </header>
-      ${seatsHtml(st)}
       ${specialsRowHtml()}
       <div class="rdn-cols"><span>Party</span><span>Party vote</span><span>Seats</span></div>
       <div class="rdn-list">${list || '<div class="rdn-empty">Waiting for results…</div>'}${moreHtml(rest.length)}</div>
@@ -1823,7 +1823,7 @@ function rdInstallCore() {
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
-      console.log('[ResultsDesk Plus] active v' + '2.4.0' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      console.log('[ResultsDesk Plus] active v' + '2.4.1' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 3000) {
       setTimeout(whenReady, 30);
     } else {
@@ -1839,7 +1839,7 @@ const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
 if (!sandboxed) {
   rdPlusMain();
 } else {
-  console.log('[ResultsDesk Plus] v2.4.0 in Firefox sandbox, moving into the page…');
+  console.log('[ResultsDesk Plus] v2.4.1 in Firefox sandbox, moving into the page…');
   const s = document.createElement('script');
   s.textContent = '(' + rdPlusMain.toString() + ')();';
   (document.head || document.documentElement).appendChild(s);

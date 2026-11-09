@@ -749,7 +749,7 @@
     // The site's bloc builder below the totals ("Majority … Left Bloc / Right Bloc"). On screens too
     // short to fit the 4%+ parties even at the smallest row size, it's hidden to make room (the
     // coalition tracker shows the same thing).
-    const builder = $('#mapDetailPanel .map-national-coalition-popover');
+    const builder = cleanDesign ? null : $('#mapDetailPanel .map-national-coalition-popover');
     const builderShown = !!builder && builder.style.display !== 'none';
     if (builderShown) blocBuilderH = builder.offsetHeight || blocBuilderH;
     let scale = 1, hideBuilder = false;
@@ -780,6 +780,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.1.0', ['New, less cluttered design: tabs moved into the top bar, a slimmer results panel, icon-only controls, a one-line special votes strip and a quieter key. The “New design” switch in the top bar goes back to the old look.', 'The map key no longer shows over the Electorates and Trends tabs.']],
     ['2.0.2', ['Special votes box is shorter (explanation text removed) so the party list has more room.']],
     ['2.0.1', ['Special votes are explained in plain words: how many are left, counted vs still to count, what they are, and when they are counted. Close electorates say how small the lead is.']],
     ['2.0.0', ['Special votes: the New Zealand panel shows how many are still to count, their share of all votes, turnout with them included and when the official count is due; electorate panels show an estimate for that seat and flag leads they could overturn. TV mode shows the total too.']],
@@ -1155,6 +1156,56 @@
   window.addEventListener('resize', updateLayoutVars);
 
   // ---------------------------------------------------------------------------
+  // 17. New (cleaner) design, with a switch in the top bar to go back to the old one.
+  // The new design is CSS under body.rd-clean, plus the view tabs moved into the top bar.
+  // ---------------------------------------------------------------------------
+  let cleanDesign = store.get('rd-clean', true) !== false;
+  function applyDesign() {
+    const body = document.body;
+    if (body.classList.contains('rd-clean') !== cleanDesign) body.classList.toggle('rd-clean', cleanDesign);
+    const desktop = window.matchMedia('(min-width: 901px)').matches;
+    const tabs = $('.dashboard-view-tabs'), inner = $('.app-header-inner'), shell = $('.dashboard-shell');
+    if (tabs && inner && shell) {
+      const inHeader = cleanDesign && desktop;
+      if (inHeader && tabs.parentElement !== inner) inner.insertBefore(tabs, inner.querySelector('.app-header-nav'));
+      if (!inHeader && tabs.parentElement !== shell) shell.insertBefore(tabs, shell.firstChild);
+    }
+    const b = $('#rdDesignBtn');
+    if (b && b.getAttribute('aria-checked') !== String(cleanDesign)) {
+      b.setAttribute('aria-checked', String(cleanDesign));
+      b.title = cleanDesign ? 'Switch to the old design' : 'Switch to the new design';
+    }
+    // Icon-only buttons in the new design still need a name on hover.
+    for (const nb of document.querySelectorAll('.app-header-nav .nav-btn:not(#rdDesignBtn)')) {
+      const t = nb.querySelector('span')?.textContent.trim();
+      if (t && !nb.title) nb.title = t;
+    }
+  }
+  function setDesign(on) {
+    let keepDefault = false;
+    try { keepDefault = atDefaultView() || forceDefault(); } catch { /* map not ready */ }
+    cleanDesign = on;
+    store.set('rd-clean', on);
+    applyDesign();
+    naturalRowH = 0; blocBuilderH = 0;
+    updateLayoutVars();
+    setTimeout(() => { measureLayout(); fitPartyRows(); if (keepDefault) applyBestView(false); }, 250);
+  }
+  function designToggle() {
+    const nav = $('.app-header-nav');
+    if (nav && !$('#rdDesignBtn')) {
+      const b = el('button', 'nav-btn rd-design-btn', '<span class="rd-switch" aria-hidden="true"><i></i></span><span>New design</span>');
+      b.id = 'rdDesignBtn';
+      b.type = 'button';
+      b.setAttribute('role', 'switch');
+      b.addEventListener('click', () => setDesign(!cleanDesign));
+      nav.insertBefore(b, nav.firstChild);
+    }
+    applyDesign();
+  }
+  window.addEventListener('resize', () => setTimeout(applyDesign, 0));
+
+  // ---------------------------------------------------------------------------
   // 10. Key colour follows the leading party (most seats, then most votes); blue by default.
   // ---------------------------------------------------------------------------
   function updateKeyColour(st) {
@@ -1218,7 +1269,8 @@
     try { geoJsonLayer.setStyle(featureStyle); updateSelectedHighlight(); } catch { /* map not drawn yet */ }
     try { if (Array.isArray(lastSeatSummaryRows) && lastSeatSummaryRows.length) renderSeatSummary(lastSeatSummaryRows); } catch { /* ignore */ }
     ensureResetViewBtn();
-    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); })
+    designToggle();
+    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); })
       .observe(document.body, { childList: true, subtree: true });
   }
 

@@ -781,6 +781,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.3.0', ['Results are explained in plain words: the panel opens with who can govern and a seats bar, electorates open with who is winning and by how much, and changes are labelled (pts, seats, votes ahead).', 'Top bar is simpler: the seat scoreboard moved into the results panel.']],
     ['2.2.0', ['Complete redesign (the “New design” switch in the top bar still goes back to the old look): a seat scoreboard in the top bar, a new results panel for the country and each electorate, a new map toolbar, and a new neutral colour scheme and typeface across every tab.', 'The map key no longer shows over the Electorates and Trends tabs.']],
     ['2.0.2', ['Special votes box is shorter (explanation text removed) so the party list has more room.']],
     ['2.0.1', ['Special votes are explained in plain words: how many are left, counted vs still to count, what they are, and when they are counted. Close electorates say how small the lead is.']],
@@ -1241,39 +1242,34 @@
     }
     return `${s.slice(i + 1).trim()} ${sur}`;
   }
-  const changeHtml = (pts, digits = 1) => {
+  const changeHtml = (pts, digits = 1, unit = '') => {
     if (!Number.isFinite(pts) || Math.abs(pts) < (digits ? 0.05 : 0.5)) return '';
-    return `<span class="rdn-chg ${pts > 0 ? 'is-up' : 'is-down'}">${pts > 0 ? '▲' : '▼'}${Math.abs(pts).toFixed(digits)}</span>`;
+    return `<span class="rdn-chg ${pts > 0 ? 'is-up' : 'is-down'}">${pts > 0 ? '▲' : '▼'} ${Math.abs(pts).toFixed(digits)}${unit}</span>`;
   };
 
-  // ----- scoreboard -----
-  function renderScore() {
-    const inner = $('.app-header-inner');
-    if (!inner) return;
-    let sc = $('#rdScore');
-    if (!sc) {
-      sc = el('button', 'rd-score');
-      sc.id = 'rdScore';
-      sc.type = 'button';
-      sc.title = 'Seats by bloc. Click for the coalition tracker.';
-      sc.addEventListener('click', () => toggleCoalition());
-    }
-    const nav = inner.querySelector('.app-header-nav');
-    if (sc.parentElement !== inner || sc.nextElementSibling !== nav) inner.insertBefore(sc, nav);
-    const st = seatState();
-    if (!st.total) { setHtml(sc, '<span class="rd-score-wait">Seats appear here as results come in</span>'); return; }
+  // ----- seats summary (top of the national panel) -----
+  const listWords = names => names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  const blocWords = b => listWords(b.name.split(' · '));
+  function seatsHtml(st) {
+    if (!st.total) return '';
     const LB = blocByKey(st, 'left'), RB = blocByKey(st, 'right'), mid = st.blocs.filter(b => b.middle);
-    const seg = m => `<i style="flex:${m.seats};background:${uiColor(m.party)}" title="${esc(partyLabel(m.party))} ${m.seats}"></i>`;
-    const segs = [
-      ...LB.members.map(seg), '<u></u>',
-      ...mid.flatMap(b => b.members).map(seg), ...st.others.map(seg), '<u></u>',
-      ...[...RB.members].reverse().map(seg),
-    ].join('');
-    const side = (b, cls) => `<span class="rd-score-side ${cls}${b.seats >= st.majority ? ' is-win' : ''}"><b>${b.seats}</b><em>${esc(b.name)}</em></span>`;
-    setHtml(sc, `${side(LB, 'is-left')}
-      <span class="rd-score-mid"><span class="rd-score-bar">${segs}<s></s></span><small>${st.majority} to govern</small></span>
-      ${side(RB, 'is-right')}`);
+    const seg = m => `<i style="flex:${m.seats};background:${uiColor(m.party)}" title="${esc(partyLabel(m.party))}: ${m.seats} seats"></i>`;
+    const segs = [...LB.members.map(seg), '<u></u>', ...mid.flatMap(b => b.members).map(seg), ...st.others.map(seg), '<u></u>', ...[...RB.members].reverse().map(seg)].join('');
+    const win = [LB, RB].find(b => b.seats >= st.majority);
+    const best = [LB, RB].sort((x, y) => y.seats - x.seats)[0];
+    const headline = win
+      ? `<b>${esc(blocWords(win))}</b> have enough seats to govern`
+      : `No group has enough seats to govern yet. <b>${esc(blocWords(best))}</b> are ${st.majority - best.seats} short`;
+    const side = (b, cls) => `<span class="rdn-seats-side ${cls}${b === win ? ' is-win' : ''}"><b>${b.seats}</b><em>${esc(b.name)}</em></span>`;
+    const midSeats = st.total - LB.seats - RB.seats;
+    return `<button type="button" class="rdn-seats" data-rdn="coalition" title="Open the coalition tracker">
+        <span class="rdn-headline">${headline}</span>
+        <span class="rdn-seats-top">${side(LB, 'is-left')}${side(RB, 'is-right')}</span>
+        <span class="rd-score-bar">${segs}<s></s></span>
+        <span class="rdn-seats-mid">${st.majority} of ${st.total} seats needed to govern${midSeats > 0 ? ` · ${midSeats} with other parties` : ''}</span>
+      </button>`;
   }
+  function renderScore() { $('#rdScore')?.remove(); }
 
   // ----- results panel -----
   let panelExpanded = false, panelFor = '';
@@ -1324,9 +1320,9 @@
       const c = chg[r.party] || {};
       return rowHtml({
         name: partyLabel(r.party), color: uiColor(r.party), share: Number(r.vote_pct) || 0,
-        sub: `${fmt(r.votes)} votes`,
-        a: pct1(Number(r.vote_pct) || 0), aSub: changeHtml(c.v),
-        b: Number(r.total_seats || 0), bSub: `${elect} elect.${changeHtml(c.s, 0)}`,
+        sub: `${fmt(r.votes)} votes${elect ? ` · ${elect} electorate${elect === 1 ? '' : 's'}` : ''}`,
+        a: pct1(Number(r.vote_pct) || 0), aSub: changeHtml(c.v, 1, ' pts'),
+        b: Number(r.total_seats || 0), bSub: changeHtml(c.s, 0),
       }, max);
     }).join('');
     const pct = countedPct();
@@ -1338,12 +1334,12 @@
         <div class="rdn-kicker">${esc(label || year)}${pct == null ? '' : ` · ${pct.toFixed(pct >= 99.95 ? 0 : 1)}% counted`}</div>
         <h2>New Zealand</h2>
         ${pct == null ? '' : `<div class="rdn-progress"><i style="width:${Math.min(100, pct).toFixed(1)}%"></i></div>`}
-        ${st.total ? `<div class="rdn-verdict">${verdict(st)}</div>` : ''}
       </header>
+      ${seatsHtml(st)}
       ${specialsRowHtml()}
-      <div class="rdn-cols"><span>Party</span><span>Vote</span><span>Seats</span></div>
+      <div class="rdn-cols"><span>Party</span><span>Party vote</span><span>Seats</span></div>
       <div class="rdn-list">${list || '<div class="rdn-empty">Waiting for results…</div>'}${moreHtml(rest.length)}</div>
-      <footer class="rdn-foot">${updated ? `<span>${esc(updated)}</span>` : ''}<span>▲▼ change since last election</span></footer>`;
+      <footer class="rdn-foot">${updated ? `<span>${esc(updated)}</span>` : ''}<span>▲▼ compared with the last election</span></footer>`;
   }
 
   function electorateHtml({ name, live }) {
@@ -1369,8 +1365,8 @@
       return rowHtml({
         name: e.name, tag: e.tag, color: uiColor(e.party), share, lead: i === 0 && e.votes > 0,
         sub: e.sub || (Number.isFinite(was) ? `${pct1(was)} last time` : ''),
-        a: pct1(share), aSub: changeHtml((share - was) * 100),
-        b: fmt(e.votes), bSub: i === 0 && entries[1] && e.votes > 0 ? `+${fmt(e.votes - entries[1].votes)}` : '',
+        a: pct1(share), aSub: changeHtml((share - was) * 100, 1, ' pts'),
+        b: fmt(e.votes), bSub: i === 0 && entries[1] && e.votes > 0 ? `${fmt(e.votes - entries[1].votes)} ahead` : '',
       }, max);
     }).join('');
 
@@ -1378,11 +1374,16 @@
     const placesTotal = Number(live.voting_places_total) || 0;
     const counted = placesTotal > 0 ? (Number(live.voting_places_counted) || 0) / placesTotal * 100 : Number(live.reporting_pct) || 0;
     let status = ''; try { status = getMapDataResultStatus(live); } catch { /* no comparison data */ }
-    let chip = '';
+    let chip = '', headline = '';
+    const done = counted >= 99.95;
     if (lead && lead.votes > 0 && !pv) {
       const who = esc(partyLabel(lead.party));
-      const word = counted < 100 ? (status === 'flipped' ? 'ahead (gain)' : 'ahead') : status === 'flipped' ? 'gain' : status === 'held' ? 'hold' : 'win';
+      const word = !done ? (status === 'flipped' ? 'ahead (gain)' : 'ahead') : status === 'flipped' ? 'gain' : status === 'held' ? 'hold' : 'win';
       chip = `<span class="rdn-chip${status === 'flipped' ? ' is-flip' : ''}" style="--c:${uiColor(lead.party)}">${who} ${word}</span>`;
+      const verb = !done ? 'is leading' : status === 'flipped' ? `has taken the seat for ${who}` : status === 'held' ? `has kept the seat for ${who}` : 'has won';
+      headline = `<b>${esc(lead.name)}</b> ${verb}${margin > 0 ? `, ${fmt(margin)} votes ahead of ${esc(entries[1].name)}` : ''}`;
+    } else if (lead && lead.votes > 0) {
+      headline = `<b>${esc(lead.name)}</b> ${done ? 'won' : 'is winning'} the party vote here${margin > 0 ? ` by ${fmt(margin)} votes` : ''}`;
     }
     const liveSet = ds() === 'EC_LIVE_2026';
     const s = specials();
@@ -1398,12 +1399,13 @@
         <div class="rdn-kicker">${pv ? 'Party vote' : 'Candidate vote'} · ${counted.toFixed(counted >= 99.95 ? 0 : 1)}% counted</div>
         <h2>${esc(name)}</h2>
         <div class="rdn-progress"><i style="width:${Math.min(100, counted).toFixed(1)}%"></i></div>
+        ${headline ? `<div class="rdn-headline">${headline}</div>` : ''}
         <div class="rdn-meta">${chip}${liveSet ? `<span class="rdn-held">${heldByHtml(name)}</span>` : ''}</div>
       </header>
       ${est > 0 ? `<div class="rdn-note${close ? ' is-warn' : ''}" title="Estimate from the national rate of special votes; the real number varies by electorate"><i></i><span>About <b>${fmt(est)}</b> special votes still to count${close ? `<small>The lead of ${fmt(margin)} could change</small>` : ''}</span></div>` : ''}
-      <div class="rdn-cols"><span>${pv ? 'Party' : 'Candidate'}</span><span>Share</span><span>Votes</span></div>
+      <div class="rdn-cols"><span>${pv ? 'Party' : 'Candidate'}</span><span>Share of votes</span><span>Votes</span></div>
       <div class="rdn-list">${list || '<div class="rdn-empty">No votes counted yet</div>'}${moreHtml(entries.length - LIMIT)}</div>
-      <footer class="rdn-foot"><span>${fmt(total)} votes</span>${Number.isFinite(turnout) && turnout > 0 ? `<span>${turnout.toFixed(1)}% turnout</span>` : ''}<span>▲▼ since last election</span></footer>`;
+      <footer class="rdn-foot"><span>${fmt(total)} votes</span>${Number.isFinite(turnout) && turnout > 0 ? `<span>${turnout.toFixed(1)}% turnout</span>` : ''}<span>▲▼ compared with the last election</span></footer>`;
   }
 
   function renderPanel() {
@@ -1420,6 +1422,7 @@
         e.preventDefault(); e.stopPropagation();
         if (a.dataset.rdn === 'more') { panelExpanded = !panelExpanded; renderPanel(); }
         if (a.dataset.rdn === 'back') { try { hideFeaturePopup(); updateSelectedHighlight(); } catch { /* ignore */ } renderPanel(); }
+        if (a.dataset.rdn === 'coalition') toggleCoalition();
         if (a.dataset.rdn === 'pin' && panelFor) { togglePin(panelFor); renderPanel(); }
       });
       wrap.appendChild(p);

@@ -448,9 +448,9 @@ body.rd-tv .rd-design-btn { display: none !important; }
 
   /* ---------- top bar: logo, tabs, scoreboard, tools ---------- */
   html body.rd-clean .app-header { background: var(--n-bg) !important; border: 0 !important; border-bottom: 1px solid var(--n-line) !important; box-shadow: none !important; }
-  html body.rd-clean .app-header-inner { height: 56px !important; min-height: 56px !important; gap: 18px !important; justify-content: flex-start !important; padding: 0 16px !important; }
+  html body.rd-clean .app-header-inner { height: 48px !important; min-height: 48px !important; gap: 18px !important; justify-content: flex-start !important; padding: 0 16px !important; }
   html body.rd-clean .app-brand { flex: none; }
-  html body.rd-clean .app-brand .rd-brand-text { font-size: 25px !important; line-height: 56px !important; }
+  html body.rd-clean .app-brand .rd-brand-text { font-size: 24px !important; line-height: 48px !important; }
   html body.rd-clean .app-brand .rd-brand-text b { color: var(--n-accent) !important; }
   /* tabs: a segmented control */
   html body.rd-clean .app-header-inner > .dashboard-view-tabs {
@@ -469,7 +469,7 @@ body.rd-tv .rd-design-btn { display: none !important; }
   html body.rd-clean .app-header-inner > .dashboard-view-tabs .dashboard-view-tab.active { background: var(--n-surface-3) !important; color: var(--n-text) !important; }
   html body.rd-clean .app-header-inner > .dashboard-view-tabs svg { width: 14px !important; height: 14px !important; }
   /* tools: icon buttons, plus the design switch */
-  html body.rd-clean .app-header-nav { margin-left: 0 !important; gap: 2px !important; display: flex !important; align-items: center; flex: none; }
+  html body.rd-clean .app-header-nav { margin-left: auto !important; gap: 2px !important; display: flex !important; align-items: center; flex: none; }
   html body.rd-clean .app-header-nav .nav-btn:not(.rd-design-btn) {
     width: 34px !important; height: 34px !important; min-height: 0 !important; justify-content: center !important; border-radius: 9px !important; gap: 0 !important; color: var(--n-muted) !important;
   }
@@ -511,7 +511,7 @@ body.rd-tv .rd-design-btn { display: none !important; }
   /* ---------- results panel ---------- */
   html body.rd-clean.rd-own-panel:not(.rd-tv)[data-dashboard-view="map"] .rd-panel {
     display: flex; flex-direction: column; position: absolute; z-index: 820; left: 16px; top: 16px; max-height: calc(100% - 32px);
-    width: clamp(340px, 26vw, 400px); overflow: hidden;
+    width: clamp(360px, 27vw, 420px); overflow: hidden;
     background: var(--n-surface); color: var(--n-text); border: 1px solid var(--n-line); border-radius: 18px; box-shadow: var(--n-shadow);
     font: 500 13px/1.35 var(--n-font);
   }
@@ -545,7 +545,20 @@ body.rd-tv .rd-design-btn { display: none !important; }
   .rdn-note b { color: var(--n-text); font-variant-numeric: tabular-nums; }
   .rdn-note small { display: block; margin-top: 1px; font-size: 11px; color: var(--n-muted); }
   .rdn-note.is-warn small { color: #f59e0b; font-weight: 600; }
-  .rdn-cols, .rdn-row { display: grid; grid-template-columns: minmax(0, 1fr) 62px 68px; column-gap: 10px; }
+  .rdn-headline { display: block; margin-top: 12px; font-size: 14.5px; font-weight: 500; line-height: 1.4; color: var(--n-soft); text-align: left; }
+  .rdn-headline b { color: var(--n-text); font-weight: 700; }
+  .rdn-seats { display: flex; flex-direction: column; gap: 7px; margin: 0 12px 10px; padding: 0 12px 12px; border: 1px solid var(--n-line); border-radius: 12px; background: var(--n-surface-2); color: var(--n-text); font: 500 12px/1.3 var(--n-font); cursor: pointer; text-align: left; flex: none; }
+  .rdn-seats:hover { border-color: var(--n-line-2); }
+  .rdn-seats-top { display: flex; justify-content: space-between; gap: 12px; margin-top: 2px; }
+  .rdn-seats-side { display: flex; flex-direction: column; gap: 1px; min-width: 0; color: var(--n-muted); font-size: 11.5px; }
+  .rdn-seats-side.is-right { align-items: flex-end; text-align: right; }
+  .rdn-seats-side b { font-size: 26px; font-weight: 700; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--n-text); }
+  .rdn-seats-side.is-win b { color: var(--n-accent); }
+  .rdn-seats-side em { font-style: normal; }
+  .rdn-seats .rd-score-bar { height: 10px; border-radius: 5px; }
+  .rdn-seats .rd-score-bar u { background: var(--n-surface-2); }
+  .rdn-seats-mid { text-align: center; font-size: 11px; color: var(--n-muted); }
+  .rdn-cols, .rdn-row { display: grid; grid-template-columns: minmax(0, 1fr) 84px 60px; column-gap: 10px; }
   .rdn-cols { padding: 8px 20px 6px; font-size: 11px; font-weight: 600; color: var(--n-faint); flex: none; }
   .rdn-cols span:not(:first-child) { text-align: right; }
   .rdn-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 0 8px 6px; }

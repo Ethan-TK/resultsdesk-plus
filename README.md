@@ -12,7 +12,7 @@ Your userscript manager will pick up new versions automatically.
 
 ## What it adds
 
-- **New design, with a switch back.** A less cluttered layout: Map / Electorates / Trends tabs sit in the top bar, the results panel is slimmer and rounded, map controls are icon-only (names on hover), special votes are one line, and the site's bloc builder is hidden (the Coalition tracker covers it). The **New design** switch in the top bar returns to the old look; your choice is remembered.
+- **New design, with a switch back.** A full redesign on wide screens: a neutral graphite theme and new typeface on every tab; a **seat scoreboard** in the top bar (both blocs, a bar of all seats and the majority line; click it for the Coalition tracker); a new **results panel** for the country and for each electorate (thin share bars, change since the last election, status such as "National hold", special votes, pin button); and a new **map toolbar** (election year, Candidate/Party, General/Māori, Go to a city, zoom, reset, coalition). The **New design** switch in the top bar returns to the old look; your choice is remembered. Below 901px wide and in TV mode the site's own layout is used.
 - **Faster live updates.** Checks for new data about once a second and redraws as soon as ResultsDesk publishes it, instead of waiting up to 30–60 seconds. Pauses while the tab is hidden.
 - **Striped flipped seats.** Electorates where the leader differs from the last election's winner get diagonal stripes over the new party's colour.
 - **Margin shading.** Close races are paler, safe seats solid. A legend on the map switches it on and off.

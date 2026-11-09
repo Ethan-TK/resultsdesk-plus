@@ -350,6 +350,7 @@
     const o = $('#rdOverhang');
     if (o) { const h = overhangHtml(st); o.innerHTML = h; o.hidden = !h; }
     if (document.body.classList.contains('rd-tv')) renderTv(st, hist);
+    try { renderNewUi(); } catch { /* not ready */ }
   }
 
   // ---------------------------------------------------------------------------
@@ -780,7 +781,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
-    ['2.1.0', ['New, less cluttered design: tabs moved into the top bar, a slimmer results panel, icon-only controls, a one-line special votes strip and a quieter key. The “New design” switch in the top bar goes back to the old look.', 'The map key no longer shows over the Electorates and Trends tabs.']],
+    ['2.2.0', ['Complete redesign (the “New design” switch in the top bar still goes back to the old look): a seat scoreboard in the top bar, a new results panel for the country and each electorate, a new map toolbar, and a new neutral colour scheme and typeface across every tab.', 'The map key no longer shows over the Electorates and Trends tabs.']],
     ['2.0.2', ['Special votes box is shorter (explanation text removed) so the party list has more room.']],
     ['2.0.1', ['Special votes are explained in plain words: how many are left, counted vs still to count, what they are, and when they are counted. Close electorates say how small the lead is.']],
     ['2.0.0', ['Special votes: the New Zealand panel shows how many are still to count, their share of all votes, turnout with them included and when the official count is due; electorate panels show an estimate for that seat and flag leads they could overturn. TV mode shows the total too.']],
@@ -858,7 +859,7 @@
   new MutationObserver(() => {
     const isLight = document.body.classList.contains('light-mode');
     if (isLight === wasLight) return;
-    wasLight = isLight;
+    wasLight = isLight; try { renderNewUi(); } catch { /* not ready */ }
     try { geoJsonLayer.setStyle(featureStyle); updateSelectedHighlight(); } catch { /* map not ready */ }
   }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
@@ -907,7 +908,7 @@
       const m = map.getContainer().getBoundingClientRect();
       const gap = document.body.classList.contains('rd-tv') ? 16 : 24; // breathing room at the edges
       let left = gap, right = gap;
-      const panel = visibleRect($('#mapDetailPanel'));
+      const panel = visibleRect($('#rdPanel')) || visibleRect($('#mapDetailPanel'));
       if (panel && panel.left < m.left + m.width / 2) left = Math.max(left, panel.right - m.left + gap);
       const rail = visibleRect($('#mapMagicWallControlsRail'));
       if (rail && rail.right > m.left + m.width / 2) right = Math.max(right, m.right - rail.left + gap);
@@ -915,6 +916,7 @@
       // The key and overhang notice are obstacles (each on its own). Pinned chips are ignored:
       // they may sit over land rather than shrink the map.
       const items = $('#rdDock') ? [...$('#rdDock').querySelectorAll(':scope > .rd-overhang, :scope > .rd-legend')] : [];
+      if ($('#rdTools')) items.push($('#rdTools'));
       const boxes = items.map(visibleRect).filter(Boolean)
         .map(d => ({ l: d.left - m.left - gap, t: d.top - m.top - gap, r: d.right - m.left + gap, b: d.bottom - m.top + gap }));
       const box = boxes.length ? boxes : null;
@@ -1187,6 +1189,7 @@
     cleanDesign = on;
     store.set('rd-clean', on);
     applyDesign();
+    renderNewUi();
     naturalRowH = 0; blocBuilderH = 0;
     updateLayoutVars();
     setTimeout(() => { measureLayout(); fitPartyRows(); if (keepDefault) applyBestView(false); }, 250);
@@ -1204,6 +1207,308 @@
     applyDesign();
   }
   window.addEventListener('resize', () => setTimeout(applyDesign, 0));
+
+  // ---------------------------------------------------------------------------
+  // 18. New design components (only shown with the new design on, desktop width):
+  //   #rdScore  seat scoreboard in the top bar
+  //   #rdPanel  results panel (national summary / electorate), replaces the site's panel
+  //   #rdTools  map toolbar, replaces the site's controls rail
+  // All three are drawn from the site's data; the site's own panel and rail stay in the
+  // page (hidden) so its logic, and the old design, keep working.
+  // ---------------------------------------------------------------------------
+  const newUi = () => cleanDesign && window.matchMedia('(min-width: 901px)').matches && !document.body.classList.contains('rd-tv');
+  const setHtml = (node, html) => { if (node && node.__rdHtml !== html) { node.__rdHtml = html; node.innerHTML = html; } };
+  const viewMode = () => { try { return currentViewMode === 'partyvote' ? 'partyvote' : 'electorate'; } catch { return 'electorate'; } };
+  const uiColor = p => { const c = partyColor(p); return /^#0{3}(0{3})?$/.test(String(c)) && !document.body.classList.contains('light-mode') ? '#5d6370' : c; };
+  const pct1 = f => `${(f * 100).toFixed(1)}%`;
+  const ICON = {
+    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>',
+    caret: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+    minus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>',
+    reset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>',
+    people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6M12 14.5c1.1-.3 2.5-.5 4-.5 3.3 0 6 2.7 6 6"/></svg>',
+  };
+
+  // "BUTTERICK, Mike" -> "Mike Butterick"
+  function personName(raw) {
+    const s = String(raw || '').replace(/\*$/, '').trim();
+    const i = s.indexOf(',');
+    if (i < 0) return s;
+    let sur = s.slice(0, i).trim();
+    if (sur === sur.toUpperCase() || /^Mc[A-Z]/.test(sur)) {
+      sur = sur.toLowerCase().replace(/(^|[\s\-'’])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()).replace(/^Mc(\p{L})/u, (m, a) => 'Mc' + a.toUpperCase());
+    }
+    return `${s.slice(i + 1).trim()} ${sur}`;
+  }
+  const changeHtml = (pts, digits = 1) => {
+    if (!Number.isFinite(pts) || Math.abs(pts) < (digits ? 0.05 : 0.5)) return '';
+    return `<span class="rdn-chg ${pts > 0 ? 'is-up' : 'is-down'}">${pts > 0 ? '▲' : '▼'}${Math.abs(pts).toFixed(digits)}</span>`;
+  };
+
+  // ----- scoreboard -----
+  function renderScore() {
+    const inner = $('.app-header-inner');
+    if (!inner) return;
+    let sc = $('#rdScore');
+    if (!sc) {
+      sc = el('button', 'rd-score');
+      sc.id = 'rdScore';
+      sc.type = 'button';
+      sc.title = 'Seats by bloc. Click for the coalition tracker.';
+      sc.addEventListener('click', () => toggleCoalition());
+    }
+    const nav = inner.querySelector('.app-header-nav');
+    if (sc.parentElement !== inner || sc.nextElementSibling !== nav) inner.insertBefore(sc, nav);
+    const st = seatState();
+    if (!st.total) { setHtml(sc, '<span class="rd-score-wait">Seats appear here as results come in</span>'); return; }
+    const LB = blocByKey(st, 'left'), RB = blocByKey(st, 'right'), mid = st.blocs.filter(b => b.middle);
+    const seg = m => `<i style="flex:${m.seats};background:${uiColor(m.party)}" title="${esc(partyLabel(m.party))} ${m.seats}"></i>`;
+    const segs = [
+      ...LB.members.map(seg), '<u></u>',
+      ...mid.flatMap(b => b.members).map(seg), ...st.others.map(seg), '<u></u>',
+      ...[...RB.members].reverse().map(seg),
+    ].join('');
+    const side = (b, cls) => `<span class="rd-score-side ${cls}${b.seats >= st.majority ? ' is-win' : ''}"><b>${b.seats}</b><em>${esc(b.name)}</em></span>`;
+    setHtml(sc, `${side(LB, 'is-left')}
+      <span class="rd-score-mid"><span class="rd-score-bar">${segs}<s></s></span><small>${st.majority} to govern</small></span>
+      ${side(RB, 'is-right')}`);
+  }
+
+  // ----- results panel -----
+  let panelExpanded = false, panelFor = '';
+  const META_KEY = /^(g_|electorate_|updated_at$|last_reported_at$|REPORTING$|VOTING_|ec_stats$|TOTAL$|__)/;
+  const partyVotes = raw => Object.entries(raw || {}).filter(([k, v]) => typeof v === 'number' && !META_KEY.test(k));
+
+  function selectedElectorate() {
+    const p = $('#mapDetailPanel');
+    if (!p || !p.classList.contains('has-result')) return null;
+    const h3 = p.querySelector('.popup-header h3');
+    const name = h3 ? [...h3.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim() || h3.textContent.trim() : '';
+    const live = name ? liveByName(name) : null;
+    return live ? { name, live } : null;
+  }
+
+  function specialsRowHtml() {
+    const s = specials();
+    if (!s) return '';
+    if (s.counted) return `<div class="rdn-note"><i class="is-done"></i><span><b>${fmt(s.left)}</b> special votes counted</span></div>`;
+    return `<div class="rdn-note" title="Counted tonight ${fmt(s.cast)} (${(100 - s.share * 100).toFixed(0)}%) · special votes ${fmt(s.left)} (${(s.share * 100).toFixed(0)}%)"><i></i><span><b>${fmt(s.left)}</b> special votes still to count<small>Official result ${OFFICIAL_RESULTS_LABEL}</small></span></div>`;
+  }
+
+  function rowHtml(r, max) {
+    return `<div class="rdn-row${r.lead ? ' is-lead' : ''}" style="--c:${r.color}">
+      <div class="rdn-who"><span class="rdn-name">${esc(r.name)}${r.tag ? `<em>${esc(r.tag)}</em>` : ''}</span><span class="rdn-sub">${r.sub}</span></div>
+      <div class="rdn-num"><b>${r.a}</b><span>${r.aSub || ''}</span></div>
+      <div class="rdn-num is-big"><b>${r.b}</b><span>${r.bSub || ''}</span></div>
+      <div class="rdn-bar"><i style="width:${max > 0 ? Math.max(0.6, (r.share / max) * 100).toFixed(1) : 0}%"></i></div>
+    </div>`;
+  }
+  const moreHtml = n => n > 0 ? `<button type="button" class="rdn-more" data-rdn="more">${panelExpanded ? 'Show fewer' : `Show ${n} more`}</button>` : '';
+
+  function nationalHtml() {
+    const rows = (seatRows || []).filter(r => Number(r.votes) > 0 || Number(r.total_seats) > 0)
+      .sort((a, b) => Number(b.votes || 0) - Number(a.votes || 0));
+    // Changes since the last election, read from the site's own (hidden) panel when it has them.
+    const chg = {};
+    document.querySelectorAll('#mapDetailPanel .candidate-result-row[data-row-key^="NZ::"]').forEach(n => {
+      const read = sel => { const t = n.querySelector(sel)?.textContent.trim() || ''; const v = parseFloat(t.replace(/[^\d.]/g, '')); return Number.isFinite(v) ? (t.includes('▼') ? -v : v) : NaN; };
+      chg[n.dataset.rowKey.slice(4)] = { v: read('.map-national-vote-change'), s: read('.map-national-seat-change') };
+    });
+    const main = rows.filter(r => Number(r.total_seats) > 0 || Number(r.vote_pct) >= PARTY_FIT_THRESHOLD);
+    const rest = rows.filter(r => !main.includes(r));
+    const shown = panelExpanded ? rows : main;
+    const max = Math.max(0, ...rows.map(r => Number(r.vote_pct) || 0));
+    const list = shown.map(r => {
+      const elect = Number(r.general_electorate_seats || 0) + Number(r.maori_electorate_seats || 0);
+      const c = chg[r.party] || {};
+      return rowHtml({
+        name: partyLabel(r.party), color: uiColor(r.party), share: Number(r.vote_pct) || 0,
+        sub: `${fmt(r.votes)} votes`,
+        a: pct1(Number(r.vote_pct) || 0), aSub: changeHtml(c.v),
+        b: Number(r.total_seats || 0), bSub: `${elect} elect.${changeHtml(c.s, 0)}`,
+      }, max);
+    }).join('');
+    const pct = countedPct();
+    const st = seatState();
+    const year = String(ds()).match(/\d{4}/)?.[0] || '';
+    let label = ''; try { label = DATASETS[ds()]?.label || ''; } catch { /* ignore */ }
+    const updated = $('#mapDetailPanel [data-live-refresh-status]')?.textContent.trim() || '';
+    return `<header class="rdn-head">
+        <div class="rdn-kicker">${esc(label || year)}${pct == null ? '' : ` · ${pct.toFixed(pct >= 99.95 ? 0 : 1)}% counted`}</div>
+        <h2>New Zealand</h2>
+        ${pct == null ? '' : `<div class="rdn-progress"><i style="width:${Math.min(100, pct).toFixed(1)}%"></i></div>`}
+        ${st.total ? `<div class="rdn-verdict">${verdict(st)}</div>` : ''}
+      </header>
+      ${specialsRowHtml()}
+      <div class="rdn-cols"><span>Party</span><span>Vote</span><span>Seats</span></div>
+      <div class="rdn-list">${list || '<div class="rdn-empty">Waiting for results…</div>'}${moreHtml(rest.length)}</div>
+      <footer class="rdn-foot">${updated ? `<span>${esc(updated)}</span>` : ''}<span>▲▼ change since last election</span></footer>`;
+  }
+
+  function electorateHtml({ name, live }) {
+    const pv = viewMode() === 'partyvote';
+    const prev = pv ? live.comparison_party_vote_raw : live.comparison_candidate_raw;
+    const prevTotal = Number(prev?.TOTAL) || 0;
+    let entries;
+    if (pv) {
+      entries = partyVotes(live.party_vote_raw).map(([party, votes]) => ({ party, votes, name: partyLabel(party), sub: '' }));
+    } else if (Array.isArray(live.candidate_entries) && live.candidate_entries.length) {
+      entries = live.candidate_entries.map(c => ({ party: c.party, votes: Number(c.votes) || 0, name: personName(c.candidate_name), tag: c.incumbent ? 'MP' : '', sub: esc(partyLabel(c.party)) }));
+    } else {
+      entries = partyVotes(live.raw).map(([party, votes]) => ({ party, votes, name: personName(live.candidates?.[party] || partyLabel(party)), sub: esc(partyLabel(party)) }));
+    }
+    entries = entries.filter(e => e.votes > 0 || !pv).sort((a, b) => b.votes - a.votes);
+    const total = Number(pv ? live.party_vote_total_votes : live.total_votes) || entries.reduce((s, e) => s + e.votes, 0);
+    const max = total > 0 && entries[0] ? entries[0].votes / total : 0;
+    const LIMIT = 6;
+    const shown = panelExpanded ? entries : entries.slice(0, LIMIT);
+    const list = shown.map((e, i) => {
+      const share = total > 0 ? e.votes / total : 0;
+      const was = prevTotal > 0 && typeof prev[e.party] === 'number' ? prev[e.party] / prevTotal : NaN;
+      return rowHtml({
+        name: e.name, tag: e.tag, color: uiColor(e.party), share, lead: i === 0 && e.votes > 0,
+        sub: e.sub || (Number.isFinite(was) ? `${pct1(was)} last time` : ''),
+        a: pct1(share), aSub: changeHtml((share - was) * 100),
+        b: fmt(e.votes), bSub: i === 0 && entries[1] && e.votes > 0 ? `+${fmt(e.votes - entries[1].votes)}` : '',
+      }, max);
+    }).join('');
+
+    const lead = entries[0], margin = lead && entries[1] ? lead.votes - entries[1].votes : 0;
+    const placesTotal = Number(live.voting_places_total) || 0;
+    const counted = placesTotal > 0 ? (Number(live.voting_places_counted) || 0) / placesTotal * 100 : Number(live.reporting_pct) || 0;
+    let status = ''; try { status = getMapDataResultStatus(live); } catch { /* no comparison data */ }
+    let chip = '';
+    if (lead && lead.votes > 0 && !pv) {
+      const who = esc(partyLabel(lead.party));
+      const word = counted < 100 ? (status === 'flipped' ? 'ahead (gain)' : 'ahead') : status === 'flipped' ? 'gain' : status === 'held' ? 'hold' : 'win';
+      chip = `<span class="rdn-chip${status === 'flipped' ? ' is-flip' : ''}" style="--c:${uiColor(lead.party)}">${who} ${word}</span>`;
+    }
+    const liveSet = ds() === 'EC_LIVE_2026';
+    const s = specials();
+    const est = s && !s.counted && !pv ? Math.round((Number(live.total_votes) || 0) * s.ratio / 10) * 10 : 0;
+    const close = est > 0 && margin > 0 && margin < est * SPECIALS_SWING;
+    const pinned = pins.includes(name);
+    const turnout = Number(live.ec_stats?.turnoutPct);
+    return `<header class="rdn-head">
+        <div class="rdn-topline">
+          <button type="button" class="rdn-back" data-rdn="back">${ICON.back}<span>New Zealand</span></button>
+          <button type="button" class="rdn-pin${pinned ? ' is-on' : ''}" data-rdn="pin" title="${pinned ? 'Unpin' : 'Pin'} ${esc(name)}" aria-pressed="${pinned}">${PIN_SVG}</button>
+        </div>
+        <div class="rdn-kicker">${pv ? 'Party vote' : 'Candidate vote'} · ${counted.toFixed(counted >= 99.95 ? 0 : 1)}% counted</div>
+        <h2>${esc(name)}</h2>
+        <div class="rdn-progress"><i style="width:${Math.min(100, counted).toFixed(1)}%"></i></div>
+        <div class="rdn-meta">${chip}${liveSet ? `<span class="rdn-held">${heldByHtml(name)}</span>` : ''}</div>
+      </header>
+      ${est > 0 ? `<div class="rdn-note${close ? ' is-warn' : ''}" title="Estimate from the national rate of special votes; the real number varies by electorate"><i></i><span>About <b>${fmt(est)}</b> special votes still to count${close ? `<small>The lead of ${fmt(margin)} could change</small>` : ''}</span></div>` : ''}
+      <div class="rdn-cols"><span>${pv ? 'Party' : 'Candidate'}</span><span>Share</span><span>Votes</span></div>
+      <div class="rdn-list">${list || '<div class="rdn-empty">No votes counted yet</div>'}${moreHtml(entries.length - LIMIT)}</div>
+      <footer class="rdn-foot"><span>${fmt(total)} votes</span>${Number.isFinite(turnout) && turnout > 0 ? `<span>${turnout.toFixed(1)}% turnout</span>` : ''}<span>▲▼ since last election</span></footer>`;
+  }
+
+  function renderPanel() {
+    const wrap = $('#mapWrap');
+    if (!wrap) return;
+    let p = $('#rdPanel');
+    if (!p) {
+      p = el('section', 'rd-panel');
+      p.id = 'rdPanel';
+      p.setAttribute('aria-label', 'Results');
+      p.addEventListener('click', e => {
+        const a = e.target.closest('[data-rdn]');
+        if (!a) return;
+        e.preventDefault(); e.stopPropagation();
+        if (a.dataset.rdn === 'more') { panelExpanded = !panelExpanded; renderPanel(); }
+        if (a.dataset.rdn === 'back') { try { hideFeaturePopup(); updateSelectedHighlight(); } catch { /* ignore */ } renderPanel(); }
+        if (a.dataset.rdn === 'pin' && panelFor) { togglePin(panelFor); renderPanel(); }
+      });
+      wrap.appendChild(p);
+    }
+    if (!newUi()) { document.body.classList.remove('rd-own-panel'); return; }
+    const sel = selectedElectorate();
+    const key = sel ? sel.name : '';
+    if (key !== panelFor) { panelFor = key; panelExpanded = false; p.scrollTop = 0; }
+    let html = '';
+    try { html = sel ? electorateHtml(sel) : nationalHtml(); } catch (err) { html = ''; console.warn('[ResultsDesk Plus] panel', err); }
+    // If our panel can't be drawn (site data changed shape), fall back to the site's own panel.
+    document.body.classList.toggle('rd-own-panel', !!html);
+    p.classList.toggle('is-electorate', !!sel);
+    setHtml(p, html);
+  }
+
+  // ----- map toolbar -----
+  let toolsMenu = '';
+  const REGIONS = [['resetZoomBtn', 'All of New Zealand'], ['viewAucklandBtn', 'Auckland'], ['viewHamiltonBtn', 'Hamilton'], ['viewTaurangaBtn', 'Tauranga'], ['viewWellingtonBtn', 'Wellington'], ['viewChristchurchBtn', 'Christchurch'], ['viewDunedinBtn', 'Dunedin']];
+  function datasetList() {
+    const out = [];
+    try {
+      for (const [k, v] of Object.entries(DATASETS)) {
+        if (/^(EC_DEMO|SANDBOX|TEST|2026)$/.test(k)) continue;
+        out.push({ k, label: v.label || k, by: /^BY/.test(k) });
+      }
+    } catch { /* not ready */ }
+    const rank = d => d.k === 'EC_LIVE_2026' ? 9999 : d.by ? 0 : Number(d.k) || 1;
+    return out.sort((a, b) => rank(b) - rank(a));
+  }
+  function renderTools() {
+    const wrap = $('#mapWrap');
+    if (!wrap) return;
+    let t = $('#rdTools');
+    if (!t) {
+      t = el('div', 'rd-tools');
+      t.id = 'rdTools';
+      t.setAttribute('role', 'toolbar');
+      t.setAttribute('aria-label', 'Map controls');
+      t.addEventListener('click', e => {
+        const a = e.target.closest('[data-t]');
+        if (!a) return;
+        e.preventDefault(); e.stopPropagation();
+        const [act, arg] = a.dataset.t.split(':');
+        if (act === 'menu') { toolsMenu = toolsMenu === arg ? '' : arg; renderTools(); return; }
+        toolsMenu = '';
+        if (act === 'mode') document.getElementById(arg === 'partyvote' ? 'partyBtnMap' : 'candidateBtnMap')?.click();
+        if (act === 'layer') document.getElementById(arg === 'Maori' ? 'maoriBtnMap' : 'generalBtnMap')?.click();
+        if (act === 'ds') { try { window.switchDataset(arg); } catch { /* ignore */ } }
+        if (act === 'region') { if (arg === 'resetZoomBtn') applyBestView(true); else document.getElementById(arg)?.click(); }
+        if (act === 'zoom') { try { arg === 'in' ? map.zoomIn() : map.zoomOut(); } catch { /* ignore */ } }
+        if (act === 'reset') $('.rd-reset-view-btn')?.click();
+        if (act === 'coalition') toggleCoalition();
+        setTimeout(() => { renderTools(); renderPanel(); }, 60);
+      });
+      document.addEventListener('click', e => { if (toolsMenu && !e.target.closest?.('#rdTools')) { toolsMenu = ''; renderTools(); } });
+      wrap.appendChild(t);
+    }
+    const rail = $('#mapMagicWallControlsRail');
+    if (rail) { const want = newUi() ? 'none' : ''; if (rail.style.display !== want) { if (want) rail.style.setProperty('display', 'none', 'important'); else rail.style.removeProperty('display'); } }
+    if (!newUi()) return;
+    const mode = viewMode();
+    const maori = !!$('#maoriBtnMap.active') || $('#layerSelect')?.value === 'Maori';
+    let label = ''; try { label = DATASETS[ds()]?.label || String(ds()); } catch { /* ignore */ }
+    const moved = (() => { const b = $('.rd-reset-view-btn'); return !!b && !b.hidden && b.style.display !== 'none'; })();
+    const seg = (act, val, text, on) => `<button type="button" data-t="${act}:${val}" class="${on ? 'is-on' : ''}" aria-pressed="${on}">${text}</button>`;
+    const menu = (id, items) => toolsMenu === id ? `<div class="rd-tools-menu" role="menu">${items}</div>` : '';
+    const dsItems = datasetList().map((d, i, all) => `${d.by && !all[i - 1]?.by ? '<div class="rd-tools-sep">By-elections</div>' : ''}<button type="button" role="menuitem" data-t="ds:${esc(d.k)}" class="${d.k === ds() ? 'is-on' : ''}">${esc(d.label)}</button>`).join('');
+    const regionItems = REGIONS.map(([id, text]) => `<button type="button" role="menuitem" data-t="region:${id}">${text}</button>`).join('');
+    setHtml(t, `
+      <div class="rd-tools-group has-menu"><button type="button" class="rd-tools-drop" data-t="menu:ds" aria-haspopup="menu" aria-expanded="${toolsMenu === 'ds'}">${esc(label)}${ICON.caret}</button>${menu('ds', dsItems)}</div>
+      <div class="rd-tools-group rd-seg">${seg('mode', 'electorate', 'Candidate', mode === 'electorate')}${seg('mode', 'partyvote', 'Party', mode === 'partyvote')}</div>
+      <div class="rd-tools-group rd-seg">${seg('layer', 'General', 'General', !maori)}${seg('layer', 'Maori', 'Māori', maori)}</div>
+      <div class="rd-tools-group has-menu"><button type="button" class="rd-tools-drop" data-t="menu:region" aria-haspopup="menu" aria-expanded="${toolsMenu === 'region'}">Go to${ICON.caret}</button>${menu('region', regionItems)}</div>
+      <div class="rd-tools-group rd-tools-icons">
+        <button type="button" data-t="zoom:out" title="Zoom out" aria-label="Zoom out">${ICON.minus}</button>
+        <button type="button" data-t="zoom:in" title="Zoom in" aria-label="Zoom in">${ICON.plus}</button>
+        <button type="button" data-t="reset:1" title="Reset view" aria-label="Reset view"${moved ? '' : ' disabled'}>${ICON.reset}</button>
+        <button type="button" data-t="coalition:1" class="${coalOpen ? 'is-on' : ''}" title="Coalition tracker" aria-label="Coalition tracker" aria-pressed="${coalOpen}">${ICON.people}</button>
+      </div>`);
+  }
+
+  function renderNewUi() {
+    renderScore();
+    renderPanel();
+    renderTools();
+  }
+  window.addEventListener('rd-national', () => renderPanel());
+  window.addEventListener('resize', () => setTimeout(renderNewUi, 0));
 
   // ---------------------------------------------------------------------------
   // 10. Key colour follows the leading party (most seats, then most votes); blue by default.
@@ -1270,7 +1575,7 @@
     try { if (Array.isArray(lastSeatSummaryRows) && lastSeatSummaryRows.length) renderSeatSummary(lastSeatSummaryRows); } catch { /* ignore */ }
     ensureResetViewBtn();
     designToggle();
-    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); })
+    new MutationObserver(() => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); })
       .observe(document.body, { childList: true, subtree: true });
   }
 

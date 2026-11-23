@@ -618,6 +618,17 @@ function rdInstallCore() {
     map.fitBounds = (b, o) => { try { const t = map._getBoundsCenterZoom(b, o); return toView(t.center, t.zoom, o); } catch { return orig.fitBounds.call(map, b, o); } };
     map.flyToBounds = map.fitBounds;
     map.panTo = (c, o) => { try { return toView(c, map.getZoom(), o); } catch { return orig.panTo.call(map, c, o); } };
+    // Leaflet only re-centres a canvas layer when a move ends, so suburbs outside the starting view would pop in at the end;
+    // re-centre ours every frame while the fly-to runs.
+    let raf = 0;
+    const follow = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => { raf = 0; try { const r = Object.values(map._layers).find(l => l.options && l.options.pane === 'rdLocal' && l._update && l._redraw); if (r) r._update(); } catch { /* ignore */ } });
+    };
+    map.on('move', follow);
+    const stop = () => { map.off('move', follow); map.off('moveend', stop); };
+    map.on('moveend', stop);
+    setTimeout(stop, 8000);
     try { go(); } finally { setTimeout(() => { for (const n of names) { if (orig[n] === Object.getPrototypeOf(map)[n]) delete map[n]; else map[n] = orig[n]; } }, 500); }
   }
   function tvFitNz() {
@@ -1031,7 +1042,7 @@ function rdInstallCore() {
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
-    ['2.8.4', ['Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off, 25 is the default) and a Light mode switch that leaves fonts and party colours alone. Help is shorter and lists what this script adds; the About and Legal parts are gone.', '“Counted tonight” now reads “Counted”.', 'TV mode uses the new design when it is on, and has a Suburbs button that shows every electorate’s suburbs on the TV map. Its buttons sit at the top of the sidebar and, like the mouse pointer, hide when the mouse is idle and come back when it moves, and the info below slides up into the space. The auto-tour now glides between areas with a slow, eased fly-to instead of jumping.']],
+    ['2.8.4', ['Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off, 25 is the default) and a Light mode switch that leaves fonts and party colours alone. Help is shorter and lists what this script adds; the About and Legal parts are gone.', '“Counted tonight” now reads “Counted”.', 'TV mode uses the new design when it is on, and has a Suburbs button that shows every electorate’s suburbs on the TV map. Its buttons sit at the top of the sidebar and, like the mouse pointer, hide when the mouse is idle and come back when it moves, and the info below slides up into the space. The auto-tour now glides between areas with a slow, eased fly-to instead of jumping, and suburbs that weren’t in view when a move starts now appear during the move instead of at the end.']],
     ['2.8.3', ['“Areas” are now called “suburbs”, and the Suburbs button on the map always starts switched off (it is no longer remembered between visits). Opening an electorate still shows its suburbs.', 'Smoother zooming and panning with every electorate’s suburbs showing, especially in Firefox: they are redrawn once per zoom step instead of several times, drawn in far fewer steps, and the fine lines are left out when zoomed right out.', 'With suburbs showing, the diagonal “flipped” stripes are drawn over them so they stay clearly visible, and electorate borders use the same line style as the suburb borders instead of fading.']],
     ['2.8.2', ['Much smoother map: moving the mouse over the areas no longer redraws the whole map, the areas are built a few at a time so pressing the Areas button doesn’t freeze the page, and the area layer is lighter to move and zoom.']],
     ['2.8.1', ['The Electorates and Trends tabs now fill the whole window (no empty band at the bottom or gutters at the sides, and no page scroll).']],

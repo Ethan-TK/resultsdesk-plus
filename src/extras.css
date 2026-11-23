@@ -8,8 +8,8 @@
   color: #fff; white-space: nowrap; display: inline-block; transform: translateY(2px);
 }
 .app-brand .rd-brand-text b { font-weight: 400; color: #fde047; }
-body.light-mode .app-brand .rd-brand-text { color: #0f1d33; }
-body.light-mode .app-brand .rd-brand-text b { color: #b45309; }
+body.rd-light .app-brand .rd-brand-text { color: #0f1d33; }
+body.rd-light .app-brand .rd-brand-text b { color: #b45309; }
 @media (max-width: 660px) { .app-brand .rd-brand-text { font-size: 26px; } }
 
 /* ---------- site upsells and country switch: hidden ---------- */
@@ -92,7 +92,7 @@ body.rd-tv .rd-header-toggle { display: none; }
   --rd-panel-muted: #94a3b8;
   --rd-panel-line: rgba(148, 163, 184, .22);
 }
-body.light-mode {
+body.rd-light {
   --rd-panel-bg: rgba(255, 255, 255, .96);
   --rd-panel-fg: #0f1d33;
   --rd-panel-muted: #55657d;
@@ -294,26 +294,26 @@ body.rd-tv .rd-tv-panel {
 
 /* ---------- light mode ---------- */
 /* Tint the sea so pale land (no results yet) stands out from it. */
-body.light-mode #map.leaflet-container,
-body.light-mode .map-wrap { background: #edf2f7 !important; }
+body.rd-light #map.leaflet-container,
+body.rd-light .map-wrap { background: #edf2f7 !important; }
 /* Yellow accents are unreadable on white; use a deep amber instead. */
-body.light-mode .rd-coal-btn.active { color: #b45309 !important; }
-body.light-mode .rd-pin-btn.is-pinned { color: #d97706; }
-body.light-mode .rd-badge { border-color: rgba(15, 29, 51, .35); box-shadow: 0 2px 6px rgba(15, 29, 51, .2); }
-body.light-mode .rd-pin-chip, body.light-mode .rd-legend, body.light-mode .rd-coalition { box-shadow: 0 4px 14px rgba(15, 29, 51, .12); }
-body.light-mode .rd-bloc-bar { background: rgba(15, 29, 51, .08); }
-body.light-mode .rd-chip, body.light-mode .rd-held-party { background: rgba(15, 29, 51, .06); }
+body.rd-light .rd-coal-btn.active { color: #b45309 !important; }
+body.rd-light .rd-pin-btn.is-pinned { color: #d97706; }
+body.rd-light .rd-badge { border-color: rgba(15, 29, 51, .35); box-shadow: 0 2px 6px rgba(15, 29, 51, .2); }
+body.rd-light .rd-pin-chip, body.rd-light .rd-legend, body.rd-light .rd-coalition { box-shadow: 0 4px 14px rgba(15, 29, 51, .12); }
+body.rd-light .rd-bloc-bar { background: rgba(15, 29, 51, .08); }
+body.rd-light .rd-chip, body.rd-light .rd-held-party { background: rgba(15, 29, 51, .06); }
 /* TV mode follows the theme too. */
-body.light-mode.rd-tv.rd-tv.rd-tv #mapWrap { background: #edf2f7 !important; }
-body.light-mode.rd-tv .rd-tv-panel { background: #ffffff; color: #0f1d33; border-left-color: rgba(15, 29, 51, .14); }
-body.light-mode .rd-tv-sub, body.light-mode .rd-tv-coal-head, body.light-mode .rd-tv-ticker-label,
-body.light-mode .rd-ticker-item small { color: #55657d; }
-body.light-mode .rd-ticker-item span:not(.rd-dot) { color: #334155; }
-body.light-mode .rd-ticker-item.is-lead-change b { color: #be123c; }
-body.light-mode .rd-tv-bar { background: rgba(15, 29, 51, .08); }
-body.light-mode .rd-tv-coal, body.light-mode .rd-tv-ticker-label { border-top-color: rgba(15, 29, 51, .12); }
-body.light-mode .rd-tv-coal .rd-bloc-bar i { background: #0f1d33; }
-body.light-mode .rd-tv-actions button { border-color: rgba(15, 29, 51, .25); }
+body.rd-light.rd-tv.rd-tv.rd-tv #mapWrap { background: #edf2f7 !important; }
+body.rd-light.rd-tv .rd-tv-panel { background: #ffffff; color: #0f1d33; border-left-color: rgba(15, 29, 51, .14); }
+body.rd-light .rd-tv-sub, body.rd-light .rd-tv-coal-head, body.rd-light .rd-tv-ticker-label,
+body.rd-light .rd-ticker-item small { color: #55657d; }
+body.rd-light .rd-ticker-item span:not(.rd-dot) { color: #334155; }
+body.rd-light .rd-ticker-item.is-lead-change b { color: #be123c; }
+body.rd-light .rd-tv-bar { background: rgba(15, 29, 51, .08); }
+body.rd-light .rd-tv-coal, body.rd-light .rd-tv-ticker-label { border-top-color: rgba(15, 29, 51, .12); }
+body.rd-light .rd-tv-coal .rd-bloc-bar i { background: #0f1d33; }
+body.rd-light .rd-tv-actions button { border-color: rgba(15, 29, 51, .25); }
 
 /* ---------- changelog (replaces Help) ---------- */
 header .nav-btn[data-nav="help"]:not(.legal-settings-trigger) { display: none !important; }
@@ -342,13 +342,13 @@ header .nav-btn[data-nav="help"]:not(.legal-settings-trigger) { display: none !i
 .rd-cl-ver h3 { margin: 0 0 4px; font-size: 13px; font-weight: 800; letter-spacing: .04em; color: #fde047; }
 .rd-cl-ver ul { margin: 0; padding-left: 18px; }
 .rd-cl-ver li { margin: 2px 0; }
-body.light-mode .rd-cl-backdrop { background: rgba(15, 29, 51, .35); }
-body.light-mode .rd-cl { background: #ffffff; color: #0f1d33; border-color: rgba(15, 29, 51, .14); box-shadow: 0 24px 60px rgba(15, 29, 51, .25); }
-body.light-mode .rd-cl-head { border-bottom-color: rgba(15, 29, 51, .1); }
-body.light-mode .rd-cl-head p { color: #55657d; }
-body.light-mode .rd-cl-close { border-color: rgba(15, 29, 51, .2); }
-body.light-mode .rd-cl-ver { border-bottom-color: rgba(15, 29, 51, .08); }
-body.light-mode .rd-cl-ver h3 { color: #b45309; }
+body.rd-light .rd-cl-backdrop { background: rgba(15, 29, 51, .35); }
+body.rd-light .rd-cl { background: #ffffff; color: #0f1d33; border-color: rgba(15, 29, 51, .14); box-shadow: 0 24px 60px rgba(15, 29, 51, .25); }
+body.rd-light .rd-cl-head { border-bottom-color: rgba(15, 29, 51, .1); }
+body.rd-light .rd-cl-head p { color: #55657d; }
+body.rd-light .rd-cl-close { border-color: rgba(15, 29, 51, .2); }
+body.rd-light .rd-cl-ver { border-bottom-color: rgba(15, 29, 51, .08); }
+body.rd-light .rd-cl-ver h3 { color: #b45309; }
 
 /* ---------- no city labels on the map ---------- */
 .leaflet-marker-icon.poi-label-icon, .poi-label-icon .map-place-label, .poi-label-icon .poi-marker-dot { display: none !important; }
@@ -397,10 +397,10 @@ body.rd-tv #mapDetailPanel.has-result .popup-reporting-wrap { margin-right: 36px
 }
 .rd-spec-seat b { font-variant-numeric: tabular-nums; }
 .rd-spec-warn { flex-basis: 100%; padding: 3px 7px; border-radius: 3px; background: rgba(245, 158, 11, .16); color: #f59e0b; font-size: 11.5px; font-weight: 700; }
-body.light-mode .rd-specials { background: rgba(245, 158, 11, .07); border-color: rgba(180, 83, 9, .35); }
-body.light-mode .rd-spec-warn { color: #92400e; background: rgba(245, 158, 11, .18); }
-body.light-mode .rd-spec-bar i, body.light-mode .rd-spec-legend i { background: #64748b; }
-body.light-mode .rd-spec-legend i.is-left { background: #f59e0b; }
+body.rd-light .rd-specials { background: rgba(245, 158, 11, .07); border-color: rgba(180, 83, 9, .35); }
+body.rd-light .rd-spec-warn { color: #92400e; background: rgba(245, 158, 11, .18); }
+body.rd-light .rd-spec-bar i, body.rd-light .rd-spec-legend i { background: #64748b; }
+body.rd-light .rd-spec-legend i.is-left { background: #f59e0b; }
 
 /* ---------- map key only belongs on the Map tab ---------- */
 body.dashboard-body[data-dashboard-view]:not([data-dashboard-view="map"]) #rdDock { display: none !important; }
@@ -416,7 +416,7 @@ body.dashboard-body[data-dashboard-view]:not([data-dashboard-view="map"]) #rdDoc
 .rd-set-slider output { font-weight: 600; opacity: .7; font-variant-numeric: tabular-nums; }
 .rd-set-slider input { grid-column: 1 / -1; width: 100%; accent-color: #3b82f6; }
 /* light mode keeps the site's dark-mode class (so fonts and party colours are untouched) and re-points its colour variables */
-body.dashboard-body.light-mode:not(.rd-clean) {
+body.dashboard-body.rd-light:not(.rd-clean) {
   --rd-page: #f4f6f9; --rd-page-alt: #eef1f6; --rd-header: #fff; --rd-panel: #fff; --rd-panel-2: #f4f6f9; --rd-panel-3: #e9edf3; --rd-panel-subtle: #f4f6f9;
   --rd-text: #0f1d33; --rd-text-soft: #2c3a52; --rd-muted: #55657d; --rd-faint: #7a8aa0;
   --rd-border: rgba(15, 29, 51, .14); --rd-border-strong: rgba(15, 29, 51, .26); --rd-rule: rgba(15, 29, 51, .1);
@@ -425,7 +425,7 @@ body.dashboard-body.light-mode:not(.rd-clean) {
   --rd-shadow-float: 0 18px 40px rgba(20, 30, 50, .18);
   background: var(--rd-page) !important; color: var(--rd-text);
 }
-body.dashboard-body.light-mode .map-wrap, body.dashboard-body.light-mode #map, body.dashboard-body.light-mode .leaflet-container { background: #e9ecef !important; }
+body.dashboard-body.rd-light .map-wrap, body.dashboard-body.rd-light #map, body.dashboard-body.rd-light .leaflet-container { background: #e9ecef !important; }
 .rd-design-btn[aria-checked="true"] .rd-switch i, .rd-set-row[aria-checked="true"] .rd-switch i { transform: translateX(12px); }
 body.rd-tv .rd-design-btn { display: none !important; }
 
@@ -466,14 +466,14 @@ body.rd-tv .rd-design-btn { display: none !important; }
 .rdl-src { margin: 8px 0 0; font-size: 10.5px; line-height: 1.4; color: var(--l-faint); }
 .rdl-empty { padding: 10px 0; color: var(--l-muted); }
 .rdl-old { padding: 0 6px; }
-body.light-mode .rdl-old .rdl { --l-text: #243247; --l-muted: #55657d; --l-faint: #718095; --l-line: #dce2e9; --l-soft: #f1f4f8; --l-chip: #e8eef5; }
+body.rd-light .rdl-old .rdl { --l-text: #243247; --l-muted: #55657d; --l-faint: #718095; --l-line: #dce2e9; --l-soft: #f1f4f8; --l-chip: #e8eef5; }
 
 
 /* ---------- local results on the map ---------- */
 .leaflet-rdLocal-pane, .leaflet-rdLocal-pane canvas { pointer-events: none !important; }   /* the areas never take clicks */
 .leaflet-tooltip.rdl-tip { padding: 6px 9px; border-radius: 8px; font: 600 12px/1.35 var(--n-font, system-ui, sans-serif); box-shadow: 0 6px 18px rgba(0, 0, 0, .3); pointer-events: none; }
 .rd-areas-btn.active { color: #fde047 !important; }
-body.light-mode .rd-areas-btn.active { color: #b45309 !important; }
+body.rd-light .rd-areas-btn.active { color: #b45309 !important; }
 .rdl-name small { margin-left: 8px; font-size: 11px; font-weight: 500; color: var(--l-faint); font-variant-numeric: tabular-nums; }
 
 /* ---------- Electorates and Trends tabs fill the window (both designs, wide screens) ---------- */
@@ -523,7 +523,7 @@ body.light-mode .rd-areas-btn.active { color: #b45309 !important; }
     --radius-surface: var(--n-r); --radius-toolbar: var(--n-r-sm); --radius-control: var(--n-r-sm); --radius-modal: 18px;
     font-family: var(--n-font) !important; background: var(--n-bg) !important;
   }
-  html body.rd-clean.dashboard-body.light-mode {
+  html body.rd-clean.dashboard-body.rd-light {
     --n-bg: #f3f3f1; --n-surface: #ffffff; --n-surface-2: #f4f4f2; --n-surface-3: #e9e9e6;
     --n-text: #15161a; --n-soft: #2c2f36; --n-muted: #666c77; --n-faint: #8a909b;
     --n-line: rgba(0, 0, 0, .08); --n-line-2: rgba(0, 0, 0, .16);
@@ -675,8 +675,8 @@ body.light-mode .rd-areas-btn.active { color: #b45309 !important; }
   .rdn-more:hover { background: var(--n-surface-2); color: var(--n-text); }
   .rdn-empty { padding: 18px 12px; color: var(--n-muted); }
   .rdn-foot { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; padding: 9px 20px 11px; border-top: 1px solid var(--n-line); font-size: 11px; color: var(--n-faint); flex: none; }
-  html body.rd-clean.light-mode .rdn-chg.is-up { color: #15803d; }
-  html body.rd-clean.light-mode .rdn-chg.is-down { color: #b91c1c; }
+  html body.rd-clean.rd-light .rdn-chg.is-up { color: #15803d; }
+  html body.rd-clean.rd-light .rdn-chg.is-down { color: #b91c1c; }
 
   /* ---------- map toolbar ---------- */
   html body.rd-clean:not(.rd-tv)[data-dashboard-view="map"] .rd-tools {
@@ -721,4 +721,9 @@ body.light-mode .rd-areas-btn.active { color: #b45309 !important; }
 }
 
 /* the Settings dialog's last row keeps its bottom line in light mode */
-body.light-mode .legal-settings-list .legal-settings-row:last-child { border-bottom: 1px solid rgba(15, 29, 51, .14) !important; }
+body.rd-light .legal-settings-list .legal-settings-row:last-child { border-bottom: 1px solid rgba(15, 29, 51, .14) !important; }
+
+/* Settings: keep only our switches and Help (the About and Legal parts are removed) */
+.legal-settings-body > :not(.rd-set):not(.legal-settings-help-toggle):not(.legal-settings-help) { display: none !important; }
+.legal-settings-help ul { margin: 6px 0 10px; padding-left: 18px; }
+.legal-settings-help li { margin: 0 0 5px; }

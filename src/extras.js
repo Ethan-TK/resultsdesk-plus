@@ -576,7 +576,7 @@
       <div class="rd-spec-big"><b>${fmt(s.left)}</b> votes still to count <small>(estimate)</small></div>
       <div class="rd-spec-bar" role="img" aria-label="${(100 - sharePct).toFixed(0)}% of votes counted, ${sharePct.toFixed(0)}% still to count"><i style="width:${(100 - sharePct).toFixed(1)}%"></i></div>
       <div class="rd-spec-legend">
-        <span><i class="is-counted"></i>Counted tonight <b>${fmt(s.cast)}</b> (${(100 - sharePct).toFixed(0)}%)</span>
+        <span><i class="is-counted"></i>Counted <b>${fmt(s.cast)}</b> (${(100 - sharePct).toFixed(0)}%)</span>
         <span><i class="is-left"></i>Specials <b>${fmt(s.left)}</b> (${sharePct.toFixed(0)}%)</span>
       </div>`;
   }
@@ -783,7 +783,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
-    ['2.8.4', ['Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off) and a Light mode switch that leaves fonts and party colours alone.']],
+    ['2.8.4', ['Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off, 25 is the default) and a Light mode switch that leaves fonts and party colours alone. Help is shorter and lists what this script adds; the About and Legal parts are gone.', '“Counted tonight” now reads “Counted”.']],
     ['2.8.3', ['“Areas” are now called “suburbs”, and the Suburbs button on the map always starts switched off (it is no longer remembered between visits). Opening an electorate still shows its suburbs.', 'Smoother zooming and panning with every electorate’s suburbs showing, especially in Firefox: they are redrawn once per zoom step instead of several times, drawn in far fewer steps, and the fine lines are left out when zoomed right out.', 'With suburbs showing, the diagonal “flipped” stripes are drawn over them so they stay clearly visible, and electorate borders use the same line style as the suburb borders instead of fading.']],
     ['2.8.2', ['Much smoother map: moving the mouse over the areas no longer redraws the whole map, the areas are built a few at a time so pressing the Areas button doesn’t freeze the page, and the area layer is lighter to move and zoom.']],
     ['2.8.1', ['The Electorates and Trends tabs now fill the whole window (no empty band at the bottom or gutters at the sides, and no page scroll).']],
@@ -905,9 +905,9 @@
   }
 
   // Repaint the map when switching light/dark (light mode uses a different "no result" grey).
-  let wasLight = document.body.classList.contains('light-mode');
+  let wasLight = document.body.classList.contains('rd-light');
   new MutationObserver(() => {
-    const isLight = document.body.classList.contains('light-mode');
+    const isLight = document.body.classList.contains('rd-light');
     if (isLight === wasLight) return;
     wasLight = isLight; try { renderNewUi(); } catch { /* not ready */ }
     try { geoJsonLayer.setStyle(featureStyle); updateSelectedHighlight(); } catch { /* map not ready */ }
@@ -1217,7 +1217,7 @@
   // The new design is CSS under body.rd-clean, plus the view tabs moved into the top bar.
   // ---------------------------------------------------------------------------
   let cleanDesign = store.get('rd-clean', true) !== false;
-  let suburbThick = Math.max(0, Math.min(100, Number(store.get('rd-suburb-thick', 100)) || 0));   // 0 = off, 100 = the full line
+  let suburbThick = Math.max(0, Math.min(100, Number(store.get('rd-suburb-thick', 25)) || 0));   // 0 = off, 100 = the full line
   let lightTheme = store.get('rd-light', false) === true;
   function redrawSuburbs() {
     try { const r = Object.values(map._layers).find(l => l.options && l.options.pane === 'rdLocal' && l._redraw); if (r) r._redraw(); } catch { /* map not ready */ }
@@ -1225,7 +1225,24 @@
   // Two switches added to the site's Settings dialog.
   function settingsExtras() {
     const body = $('.legal-settings-body');
-    if (!body || body.querySelector('.rd-set')) return;
+    if (!body) return;
+    const help = $('#legalSettingsHelp');
+    if (help && !help.querySelector('.rd-help')) {
+      help.innerHTML = `<div class="rd-help"><h4>Using the site</h4>
+<p>Use the Map, Electorates and Trends tabs. Click an electorate, on the map or in the table, for its candidates, votes and margin. Switch between General and Māori with the map controls. Results refresh on their own, and we don’t call races.</p>
+<h4>What ResultsDesk Plus adds</h4>
+<ul>
+<li><b>New design:</b> a cleaner layout. Switch back to the old one any time with the top-bar toggle.</li>
+<li><b>Suburbs:</b> open an electorate to see how each suburb and voting place voted. The Suburbs button on the map shows every electorate’s suburbs at once.</li>
+<li><b>Flipped seats:</b> electorates that changed hands are striped on the map.</li>
+<li><b>Special votes:</b> how many are counted and how many are still to come.</li>
+<li><b>Faster updates:</b> new results show within seconds.</li>
+<li><b>Coalition builder, pinned electorates, TV mode and a changelog</b> are in the toolbar.</li>
+</ul>
+<h4>Settings</h4>
+<p>Set the suburb line thickness (0 hides the lines) and switch between dark and light mode above.</p></div>`;
+    }
+    if (body.querySelector('.rd-set')) return;
     const sec = el('div', 'rd-set', '');
     const row = (label, get, set) => {
       const b = el('button', 'rd-set-row', `<span>${label}</span><span class="rd-switch" aria-hidden="true"><i></i></span>`);
@@ -1243,7 +1260,7 @@
   }
   function applyDesign() {
     const body = document.body;
-    if (body.classList.contains('light-mode') !== lightTheme) body.classList.toggle('light-mode', lightTheme);   // the site's own dark-mode class stays, so fonts and party colours don't change
+    if (body.classList.contains('rd-light') !== lightTheme) body.classList.toggle('rd-light', lightTheme);   // the site's own dark-mode class stays, so fonts and party colours don't change
     settingsExtras();
     if (body.classList.contains('rd-clean') !== cleanDesign) body.classList.toggle('rd-clean', cleanDesign);
     const desktop = window.matchMedia('(min-width: 901px)').matches;
@@ -1300,7 +1317,7 @@
   const newUi = () => cleanDesign && window.matchMedia('(min-width: 901px)').matches && !document.body.classList.contains('rd-tv');
   const setHtml = (node, html) => { if (node && node.__rdHtml !== html) { node.__rdHtml = html; node.innerHTML = html; } };
   const viewMode = () => { try { return currentViewMode === 'partyvote' ? 'partyvote' : 'electorate'; } catch { return 'electorate'; } };
-  const uiColor = p => { const c = partyColor(p); return /^#0{3}(0{3})?$/.test(String(c)) && !document.body.classList.contains('light-mode') ? '#5d6370' : c; };
+  const uiColor = p => { const c = partyColor(p); return /^#0{3}(0{3})?$/.test(String(c)) && !document.body.classList.contains('rd-light') ? '#5d6370' : c; };
   const pct1 = f => `${(f * 100).toFixed(1)}%`;
   const ICON = {
     back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>',
@@ -1370,7 +1387,7 @@
     const s = specials();
     if (!s) return '';
     if (s.counted) return `<div class="rdn-note"><i class="is-done"></i><span><b>${fmt(s.left)}</b> special votes counted</span></div>`;
-    return `<div class="rdn-note" title="Counted tonight ${fmt(s.cast)} (${(100 - s.share * 100).toFixed(0)}%) · special votes ${fmt(s.left)} (${(s.share * 100).toFixed(0)}%)"><i></i><span><b>${fmt(s.left)}</b> special votes still to count<small>Official result ${OFFICIAL_RESULTS_LABEL}</small></span></div>`;
+    return `<div class="rdn-note" title="Counted ${fmt(s.cast)} (${(100 - s.share * 100).toFixed(0)}%) · special votes ${fmt(s.left)} (${(s.share * 100).toFixed(0)}%)"><i></i><span><b>${fmt(s.left)}</b> special votes still to count<small>Official result ${OFFICIAL_RESULTS_LABEL}</small></span></div>`;
   }
 
   function rowHtml(r, max) {

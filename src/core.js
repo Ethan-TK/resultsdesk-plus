@@ -145,7 +145,7 @@ function rdInstallCore() {
     if (!st || typeof st.fillColor !== 'string') return st;
     const live = f?.properties?.live;
     // Light mode: electorates with no result yet get a mid grey so the country stands out from the sea.
-    if (document.body?.classList.contains('light-mode')) {
+    if (document.body?.classList.contains('rd-light')) {
       const lead = (() => { try { return currentViewMode === 'partyvote' ? live?.party_vote_leader_party : live?.leader_party; } catch { return live?.leader_party; } })();
       if (!lead || lead === 'Unknown') return { ...st, fillColor: '#aeb8c5', fillOpacity: 0.9 };
     }

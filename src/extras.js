@@ -783,7 +783,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
-    ['2.8.4', ['Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a “Show suburb lines” switch and a Light mode switch.']],
+    ['2.8.4', ['Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off) and a Light mode switch that leaves fonts and party colours alone.']],
     ['2.8.3', ['“Areas” are now called “suburbs”, and the Suburbs button on the map always starts switched off (it is no longer remembered between visits). Opening an electorate still shows its suburbs.', 'Smoother zooming and panning with every electorate’s suburbs showing, especially in Firefox: they are redrawn once per zoom step instead of several times, drawn in far fewer steps, and the fine lines are left out when zoomed right out.', 'With suburbs showing, the diagonal “flipped” stripes are drawn over them so they stay clearly visible, and electorate borders use the same line style as the suburb borders instead of fading.']],
     ['2.8.2', ['Much smoother map: moving the mouse over the areas no longer redraws the whole map, the areas are built a few at a time so pressing the Areas button doesn’t freeze the page, and the area layer is lighter to move and zoom.']],
     ['2.8.1', ['The Electorates and Trends tabs now fill the whole window (no empty band at the bottom or gutters at the sides, and no page scroll).']],
@@ -1217,7 +1217,7 @@
   // The new design is CSS under body.rd-clean, plus the view tabs moved into the top bar.
   // ---------------------------------------------------------------------------
   let cleanDesign = store.get('rd-clean', true) !== false;
-  let showSuburbLines = store.get('rd-suburb-lines', true) !== false;
+  let suburbThick = Math.max(0, Math.min(100, Number(store.get('rd-suburb-thick', 100)) || 0));   // 0 = off, 100 = the full line
   let lightTheme = store.get('rd-light', false) === true;
   function redrawSuburbs() {
     try { const r = Object.values(map._layers).find(l => l.options && l.options.pane === 'rdLocal' && l._redraw); if (r) r._redraw(); } catch { /* map not ready */ }
@@ -1227,23 +1227,23 @@
     const body = $('.legal-settings-body');
     if (!body || body.querySelector('.rd-set')) return;
     const sec = el('div', 'rd-set', '');
-    sec.style.cssText = 'margin:0 0 14px;padding-bottom:12px;border-bottom:1px solid rgba(148,163,184,.25)';
     const row = (label, get, set) => {
-      const b = el('button', 'legal-settings-row rd-set-row', `<span>${label}</span><span class="rd-switch" aria-hidden="true"><i></i></span>`);
-      b.type = 'button'; b.setAttribute('role', 'switch'); b.style.cssText = 'display:flex;width:100%;justify-content:space-between;align-items:center;gap:12px';
+      const b = el('button', 'rd-set-row', `<span>${label}</span><span class="rd-switch" aria-hidden="true"><i></i></span>`);
+      b.type = 'button'; b.setAttribute('role', 'switch');
       const sync = () => { b.setAttribute('aria-checked', String(get())); };
       b.addEventListener('click', () => { set(!get()); sync(); });
       sync(); return b;
     };
-    sec.appendChild(row('Show suburb lines', () => showSuburbLines, v => { showSuburbLines = v; store.set('rd-suburb-lines', v); redrawSuburbs(); }));
+    const sl = el('label', 'rd-set-row rd-set-slider', `<span>Suburb line thickness</span><output>${suburbThick}</output><input type="range" min="0" max="100" step="1" value="${suburbThick}" aria-label="Suburb line thickness">`);
+    const inp = sl.querySelector('input'), out = sl.querySelector('output');
+    inp.addEventListener('input', () => { suburbThick = +inp.value; out.textContent = suburbThick; store.set('rd-suburb-thick', suburbThick); redrawSuburbs(); });
+    sec.appendChild(sl);
     sec.appendChild(row('Light mode', () => lightTheme, v => { lightTheme = v; store.set('rd-light', v); applyDesign(); }));
     body.insertBefore(sec, body.firstChild);
   }
   function applyDesign() {
     const body = document.body;
-    if (body.classList.contains('light-mode') !== lightTheme || body.classList.contains('dark-mode') === lightTheme) {
-      body.classList.toggle('light-mode', lightTheme); body.classList.toggle('dark-mode', !lightTheme);
-    }
+    if (body.classList.contains('light-mode') !== lightTheme) body.classList.toggle('light-mode', lightTheme);   // the site's own dark-mode class stays, so fonts and party colours don't change
     settingsExtras();
     if (body.classList.contains('rd-clean') !== cleanDesign) body.classList.toggle('rd-clean', cleanDesign);
     const desktop = window.matchMedia('(min-width: 901px)').matches;
@@ -1934,14 +1934,14 @@
       }
       ctx.globalAlpha = 1;
       if (it.isFlipped()) { ctx.fillStyle = hatchFor(ctx); ctx.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0); }   // stripes sit under the lines
-      if (showSuburbLines) {                                                          // suburb lines are drawn at every zoom
+      if (suburbThick > 0) {                                                          // suburb lines are drawn at every zoom
         ctx.beginPath();
         for (const e of it.borders) {
           const ax = e[0] * sc - o.x, ay = e[1] * sc - o.y, bx = e[2] * sc - o.x, by = e[3] * sc - o.y;
           if ((ax < vx0 && bx < vx0) || (ax > vx1 && bx > vx1) || (ay < vy0 && by < vy0) || (ay > vy1 && by > vy1)) continue;
           ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
         }
-        ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.9; ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.9 * suburbThick / 100; ctx.stroke();
       }
       ctx.restore();
       ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.9; ctx.stroke(outline);                    // electorate border, same as the suburb borders

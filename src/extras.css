@@ -410,6 +410,22 @@ body.dashboard-body[data-dashboard-view]:not([data-dashboard-view="map"]) #rdDoc
 .rd-switch { position: relative; width: 26px; height: 14px; border-radius: 7px; background: rgba(148, 163, 184, .35); transition: background .15s; flex: none; }
 .rd-switch i { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: #fff; transition: transform .15s; }
 .rd-design-btn[aria-checked="true"] .rd-switch, .rd-set-row[aria-checked="true"] .rd-switch { background: #3b82f6; }
+.rd-set { margin: 0 0 6px; padding: 0 0 8px; border-bottom: 1px solid rgba(148, 163, 184, .25); }
+.rd-set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; box-sizing: border-box; padding: 11px 0; margin: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.rd-set-slider { display: grid; grid-template-columns: 1fr auto; row-gap: 8px; cursor: default; }
+.rd-set-slider output { font-weight: 600; opacity: .7; font-variant-numeric: tabular-nums; }
+.rd-set-slider input { grid-column: 1 / -1; width: 100%; accent-color: #3b82f6; }
+/* light mode keeps the site's dark-mode class (so fonts and party colours are untouched) and re-points its colour variables */
+body.dashboard-body.light-mode:not(.rd-clean) {
+  --rd-page: #f4f6f9; --rd-page-alt: #eef1f6; --rd-header: #fff; --rd-panel: #fff; --rd-panel-2: #f4f6f9; --rd-panel-3: #e9edf3; --rd-panel-subtle: #f4f6f9;
+  --rd-text: #0f1d33; --rd-text-soft: #2c3a52; --rd-muted: #55657d; --rd-faint: #7a8aa0;
+  --rd-border: rgba(15, 29, 51, .14); --rd-border-strong: rgba(15, 29, 51, .26); --rd-rule: rgba(15, 29, 51, .1);
+  --rd-button: #fff; --rd-button-hover: #eef2f7; --rd-button-selected: #dde4ee; --rd-active-bg: #0f172a; --rd-active-text: #fff;
+  --rd-panel-bg: rgba(255, 255, 255, .96); --rd-panel-fg: #0f1d33; --rd-panel-muted: #55657d; --rd-panel-line: rgba(15, 29, 51, .14);
+  --rd-shadow-float: 0 18px 40px rgba(20, 30, 50, .18);
+  background: var(--rd-page) !important; color: var(--rd-text);
+}
+body.dashboard-body.light-mode .map-wrap, body.dashboard-body.light-mode #map, body.dashboard-body.light-mode .leaflet-container { background: #e9ecef !important; }
 .rd-design-btn[aria-checked="true"] .rd-switch i, .rd-set-row[aria-checked="true"] .rd-switch i { transform: translateX(12px); }
 body.rd-tv .rd-design-btn { display: none !important; }
 
@@ -703,3 +719,6 @@ body.light-mode .rd-areas-btn.active { color: #b45309 !important; }
     height: calc(100vh - var(--rd-map-top, 56px)) !important; max-height: none !important; border-radius: 0 !important;
   }
 }
+
+/* the Settings dialog's last row keeps its bottom line in light mode */
+body.light-mode .legal-settings-list .legal-settings-row:last-child { border-bottom: 1px solid rgba(15, 29, 51, .14) !important; }

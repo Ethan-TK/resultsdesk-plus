@@ -783,6 +783,8 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.8.1', ['The Electorates and Trends tabs now fill the whole window (no empty band at the bottom or gutters at the sides, and no page scroll).']],
+    ['2.8.0', ['Areas on the map are redrawn: each is clipped exactly to the electorate’s outline (no stray lines), built from the voting places it contains, and they follow the map when zooming.', 'Opening an electorate always shows its areas; the Areas button now shows every electorate’s areas at once.']],
     ['2.7.1', ['Fixed: after areas were shown on the map, clicking off a region could leave the whole map unclickable.', 'The “Show areas on the map” switch moved to the map toolbar (top right in the new design, side controls in the old), and the Local results panel is shorter: five rows to start, votes beside each name, and a one-line source.']],
     ['2.7.0', ['Local results on the map: a “Show areas on the map” switch in the Local results section splits the electorate into areas coloured by who won each (the part of the electorate nearest each area’s voting places, so approximate), with details on hover. Locations come from LINZ’s NZ Addresses data.', 'Fixed advance voting compared with election day for Papakura and Southland.']],
     ['2.6.0', ['Local results: electorate panels now show how each area and voting place voted (by area or by place, candidate or party vote, advance voting compared with election day), from the Electoral Commission’s own published results by voting place.']],
@@ -1166,7 +1168,12 @@
     const hdr = $('.app-header');
     root.setProperty('--rd-header-h', `${headerHidden || !hdr ? 0 : Math.round(hdr.getBoundingClientRect().height)}px`);
     const tabs = $('.dashboard-view-tabs');
-    if (tabs) root.setProperty('--rd-map-top', `${Math.max(0, Math.round(tabs.getBoundingClientRect().bottom + window.scrollY))}px`);
+    if (tabs) {
+      // New design: the tabs sit inside the top bar, so the page content starts below the bar itself.
+      const bar = tabs.closest('.app-header');
+      const bottom = bar ? (headerHidden ? 0 : bar.getBoundingClientRect().bottom) : tabs.getBoundingClientRect().bottom;
+      root.setProperty('--rd-map-top', `${Math.max(0, Math.round(bottom + window.scrollY))}px`);
+    }
     try { map.invalidateSize({ pan: false }); } catch { /* map not ready */ }
   }
   // Measure now, then once more after the site's own layout code has reacted.
@@ -1546,7 +1553,7 @@
         <button type="button" data-t="zoom:out" title="Zoom out" aria-label="Zoom out">${ICON.minus}</button>
         <button type="button" data-t="zoom:in" title="Zoom in" aria-label="Zoom in">${ICON.plus}</button>
         <button type="button" data-t="reset:1" title="Reset view" aria-label="Reset view"${moved ? '' : ' disabled'}>${ICON.reset}</button>
-        <button type="button" data-t="areas:1" class="${localMapOn ? 'is-on' : ''}" title="Show areas on the map: split an electorate into areas coloured by who won (approximate)" aria-label="Show areas on the map" aria-pressed="${localMapOn}">${ICON.areas}</button>
+        <button type="button" data-t="areas:1" class="${localMapOn ? 'is-on' : ''}" title="Show all areas on map" aria-label="Show all areas on map" aria-pressed="${localMapOn}">${ICON.areas}</button>
         <button type="button" data-t="coalition:1" class="${coalOpen ? 'is-on' : ''}" title="Coalition tracker" aria-label="Coalition tracker" aria-pressed="${coalOpen}">${ICON.people}</button>
       </div>`);
   }
@@ -1586,7 +1593,7 @@
     localData.set(slug, 'loading');
     unpackLocal(RD_LOCAL_DATA[slug])
       .then(d => localData.set(slug, d), () => localData.set(slug, 'none'))
-      .then(() => { try { renderPanel(); decorateLocalOld(); syncLocalMap(); } catch { /* ignore */ } });
+      .then(() => { try { renderPanel(); decorateLocalOld(); syncLocalMapSoon(); } catch { /* ignore */ } });
     return 'loading';
   }
 
@@ -1675,7 +1682,7 @@
       ${secHtml}
       <div class="rdl-list">${list}</div>
       ${more > 0 ? `<button type="button" class="rdl-more" data-rdl="all">${localExpanded ? 'Show fewer' : `Show all ${more + LIMIT} ${noun}`}</button>` : ''}
-      <p class="rdl-src" title="Places with fewer than 6 votes show as zero. Map areas are the part of the electorate nearest each area’s voting places, so they are approximate.">Electoral Commission ${esc(kind.toLowerCase())}${when ? ` (${when})` : ''}${prelim ? ', before special votes' : ''}.${localMapOn ? ' Map locations: LINZ NZ Addresses (CC BY 4.0).' : ''}</p>
+      <p class="rdl-src" title="Places with fewer than 6 votes show as zero. Map areas are the part of the electorate nearest each area’s voting places, so they are approximate.">Electoral Commission ${esc(kind.toLowerCase())}${when ? ` (${when})` : ''}${prelim ? ', before special votes' : ''}. Map locations: LINZ NZ Addresses (CC BY 4.0).</p>
     </section>`;
   }
 
@@ -1703,139 +1710,237 @@
   }
 
   // ----- local results on the map -----
-  // The electorate is split into areas (one per suburb or town) and each is coloured by who won it. An area's
-  // region is the part of the electorate nearer to its voting places than to any other area's (a Voronoi
-  // diagram of the places, clipped to the electorate's outline), so the regions are approximate.
+  // Every voting place inside an electorate claims the ground nearest to it (a Voronoi diagram of the places) and
+  // places in the same area are joined, so an area's region is the sum of its places' cells. Everything is drawn on one
+  // canvas clipped to the electorate's own outline, so nothing can spill outside it and the coastline is exact.
+  // Open electorate: its areas always show. The Areas button shows every electorate's areas at once.
   let localMapOn = store.get('rd-local-map', false);
-  const localGeo = new Map();                 // slug -> { parts, seeds, lat0, cells }
-  let localLayer = null, localLayerKey = '';
+  const localItems = new Map();                 // electorate name -> geometry + cells, built once its data is unpacked
+  let localRenderer = null, localKey = '', localSyncTimer = 0;
+  let localHover = null, localTip = null, localMoveTimer = 0, localMoveAt = null;
 
   const electorateGeom = name => {
     let g = null;
     try { geoJsonLayer.eachLayer(l => { if (!g && l.feature?.properties?.live?.electorate_name === name) g = l.feature.geometry; }); } catch { /* map not drawn yet */ }
     return g;
   };
-  function ringHas(ring, x, y) {
+  // Map positions are kept as Web Mercator "world" coordinates (zoom 0), which only need scaling to reach the screen.
+  const worldPt = (lon, lat) => { const p = map.project(L.latLng(lat, lon), 0); return [p.x, p.y]; };
+  function ringHasF(r, x, y) {
     let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
+      const xi = r[i], yi = r[i + 1], xj = r[j], yj = r[j + 1];
       if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
     }
     return inside;
   }
-  // Thin out a coastline: keep a vertex only when it is further than tol from the last one kept.
-  function decimate(ring, tol) {
-    const out = [ring[0]];
-    for (let i = 1; i < ring.length - 1; i++) {
-      const a = out[out.length - 1], b = ring[i];
-      if (Math.abs(b[0] - a[0]) > tol || Math.abs(b[1] - a[1]) > tol) out.push(b);
+  const inParts = (parts, x, y) => parts.some(pt => x >= pt.bb[0] && x <= pt.bb[2] && y >= pt.bb[1] && y <= pt.bb[3] &&
+    ringHasF(pt.rings[0], x, y) && !pt.rings.slice(1).some(h => ringHasF(h, x, y)));
+
+  // Clip a convex polygon to the side nx*x + ny*y <= c. Each vertex is [x, y, owner of the edge to the next vertex].
+  function clipOwned(poly, nx, ny, c, owner) {
+    const out = [];
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      const da = nx * a[0] + ny * a[1] - c, db = nx * b[0] + ny * b[1] - c;
+      if (da <= 0) {
+        out.push(a);
+        if (db > 0) { const t = da / (da - db); out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), owner]); }   // leaving: new edge starts here
+      } else if (db < 0) {
+        const t = da / (da - db); out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), a[2]]);                     // coming back in
+      }
     }
-    out.push(ring[ring.length - 1]);
-    return out.length >= 4 ? out : ring;
+    return out;
+  }
+  function voronoiCells(seeds, bb) {
+    const pad = Math.max(bb[2] - bb[0], bb[3] - bb[1]) * 0.05 + 1e-6;
+    const box = [[bb[0] - pad, bb[1] - pad, -1], [bb[2] + pad, bb[1] - pad, -1], [bb[2] + pad, bb[3] + pad, -1], [bb[0] - pad, bb[3] + pad, -1]];
+    return seeds.map((s, i) => {
+      let poly = box.map(v => v.slice()), reach = Infinity;
+      const order = seeds.map((t, j) => [(t.x - s.x) ** 2 + (t.y - s.y) ** 2, j]).filter(t => t[1] !== i).sort((a, b) => a[0] - b[0]);
+      for (let m = 0; m < order.length && order[m][0] <= 4 * reach; m++) {          // far seeds cannot change this cell
+        const j = order[m][1], o = seeds[j];
+        poly = clipOwned(poly, o.x - s.x, o.y - s.y, (o.x * o.x + o.y * o.y - s.x * s.x - s.y * s.y) / 2, j);
+        if (poly.length < 3) break;
+        if (m >= 2) { reach = 0; for (const v of poly) { const d2 = (v[0] - s.x) ** 2 + (v[1] - s.y) ** 2; if (d2 > reach) reach = d2; } }
+      }
+      return poly;
+    });
   }
 
-  function localGeoFor(slug, name, d) {
-    let g = localGeo.get(slug);
-    if (g) return g;
+  function buildLocalItem(name, d) {
     const geom = electorateGeom(name);
     if (!geom) return null;
     const polys = geom.type === 'MultiPolygon' ? geom.coordinates : [geom.coordinates];
-    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    let x0 = 1e18, y0 = 1e18, x1 = -1e18, y1 = -1e18;
     const parts = polys.map(poly => {
-      let a = 1e9, b = 1e9, c = -1e9, e = -1e9;
-      for (const p of poly[0]) { if (p[0] < a) a = p[0]; if (p[0] > c) c = p[0]; if (p[1] < b) b = p[1]; if (p[1] > e) e = p[1]; }
+      const rings = poly.map(r => { const a = new Float64Array(r.length * 2); for (let i = 0; i < r.length; i++) { const p = worldPt(r[i][0], r[i][1]); a[2 * i] = p[0]; a[2 * i + 1] = p[1]; } return a; });
+      let a = 1e18, b = 1e18, c = -1e18, e = -1e18;
+      const o = rings[0];
+      for (let i = 0; i < o.length; i += 2) { if (o[i] < a) a = o[i]; if (o[i] > c) c = o[i]; if (o[i + 1] < b) b = o[i + 1]; if (o[i + 1] > e) e = o[i + 1]; }
       x0 = Math.min(x0, a); y0 = Math.min(y0, b); x1 = Math.max(x1, c); y1 = Math.max(y1, e);
-      return { bb: [a, b, c, e], outer: poly[0], holes: poly.slice(1), simple: null };
+      return { rings, bb: [a, b, c, e] };
     });
-    const tol = Math.max(0.00015, Math.hypot(x1 - x0, y1 - y0) / 6000);   // coarser for huge electorates
-    for (const pt of parts) pt.simple = decimate(pt.outer, tol);
-    // one seed per area: the vote-weighted centre of its voting places that lie inside this electorate
-    const acc = new Map();
-    for (const [loc, , , , cv, x, y] of d.R) {
-      if (!loc || x == null) continue;
-      if (!parts.some(pt => x >= pt.bb[0] && x <= pt.bb[2] && y >= pt.bb[1] && y <= pt.bb[3] && ringHas(pt.simple, x, y))) continue;
-      const w = 1 + cv.reduce((s, v) => s + v, 0);
-      const a = acc.get(loc) || { name: loc, sx: 0, sy: 0, w: 0 };
-      a.sx += x * w; a.sy += y * w; a.w += w; acc.set(loc, a);
+    // seeds: the voting places inside this electorate (places at the same spot are one seed)
+    const seeds = [], seen = new Set();
+    for (const row of d.R) {
+      const loc = row[0], lon = row[5], lat = row[6];
+      if (!loc || lon == null) continue;
+      const [x, y] = worldPt(lon, lat);
+      if (!inParts(parts, x, y)) continue;
+      const key = Math.round(x * 4e5) + ',' + Math.round(y * 4e5);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      seeds.push({ x, y, area: loc });
     }
-    g = { parts, seeds: [...acc.values()].map(a => ({ name: a.name, x: a.sx / a.w, y: a.sy / a.w })), lat0: (y0 + y1) / 2, cells: null };
-    localGeo.set(slug, g);
-    return g;
-  }
-
-  function localCells(g) {
-    if (g.cells) return g.cells;
-    const k = Math.cos(g.lat0 * Math.PI / 180);                       // longitude degrees are shorter away from the equator
-    const S = g.seeds.map(s => [s.x * k, s.y]);
-    const subject = g.parts.map(pt => pt.simple.map(p => [p[0] * k, p[1]]));
-    const clip = (ring, nx, ny, c) => {                               // keep the side where nx*x + ny*y <= c
-      const out = [];
-      for (let i = 0; i < ring.length; i++) {
-        const a = ring[i], b = ring[(i + 1) % ring.length];
-        const da = nx * a[0] + ny * a[1] - c, db = nx * b[0] + ny * b[1] - c;
-        if (da <= 0) out.push(a);
-        if ((da < 0 && db > 0) || (da > 0 && db < 0)) { const t = da / (da - db); out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]); }
+    const bb = [x0, y0, x1, y1];
+    const polys2 = seeds.length ? voronoiCells(seeds, bb) : [];
+    const cells = polys2.map((pts, i) => ({ pts, area: seeds[i].area, sx: seeds[i].x, sy: seeds[i].y }));
+    // lines are only drawn where two different areas meet
+    const borders = [];
+    polys2.forEach((pts, i) => {
+      for (let k = 0; k < pts.length; k++) {
+        const o = pts[k][2];
+        if (o < 0 || seeds[o].area === seeds[i].area) continue;
+        const b = pts[(k + 1) % pts.length];
+        borders.push([pts[k][0], pts[k][1], b[0], b[1], seeds[i].area]);
       }
-      return out;
-    };
-    const cells = new Map();
-    S.forEach((s, i) => {
-      const order = S.map((p, j) => [(p[0] - s[0]) ** 2 + (p[1] - s[1]) ** 2, j]).filter(t => t[1] !== i).sort((a, b) => a[0] - b[0]);
-      let rings = subject, reach = Infinity;                           // reach: squared distance to the cell's furthest corner
-      for (let m = 0; m < order.length && order[m][0] <= 4 * reach; m++) {
-        const o = S[order[m][1]];
-        const nx = o[0] - s[0], ny = o[1] - s[1], c = (o[0] * o[0] + o[1] * o[1] - s[0] * s[0] - s[1] * s[1]) / 2;
-        rings = rings.map(r => clip(r, nx, ny, c)).filter(r => r.length >= 3);
-        if (!rings.length) break;
-        if (m >= 2) { reach = 0; for (const r of rings) for (const p of r) { const d2 = (p[0] - s[0]) ** 2 + (p[1] - s[1]) ** 2; if (d2 > reach) reach = d2; } }
-      }
-      cells.set(g.seeds[i].name, rings.map(r => r.map(p => [p[1], p[0] / k])));   // [lat, lon] for Leaflet
     });
-    g.cells = cells;
-    return cells;
+    return {
+      name, d, bb, parts, cells, borders, live: liveByName(name), _st: null,
+      style(mode) {
+        if (this._st && this._st.mode === mode) return this._st.map;
+        const an = localAnalysis(this.d, mode, liveByName(this.name) || this.live);
+        const map2 = new Map();
+        if (an) for (const a of an.areas) {
+          const share = Math.max(0, Math.min(1, (a.share - 0.3) / 0.4));         // 30% of the vote = faint, 70% = strong
+          map2.set(a.name, { color: an.cols[a.i].color, op: 0.32 + 0.5 * share,
+            html: `<b>${esc(a.name)}</b><br>${esc(an.cols[a.i].label)} ${(a.share * 100).toFixed(0)}%<br>${fmt(a.total)} votes · ${a.places} voting place${a.places === 1 ? '' : 's'}` });
+        }
+        this._st = { mode, map: map2 };
+        return map2;
+      },
+    };
   }
 
-  // Hover details for the areas. The areas themselves ignore the mouse (so they can never block a click), so the map's
-  // own mouse position is tested against them here.
-  let localHits = [], localHover = null, localTip = null, localMoveTimer = 0, localMoveAt = null;
-  function hideLocalTip() {
-    if (localHover) { try { localHover.poly.setStyle({ weight: 0.8, opacity: 0.55 }); } catch { /* removed */ } localHover = null; }
-    if (localTip) { try { map.removeLayer(localTip); } catch { /* not open */ } }
+  // Drawing: runs inside Leaflet's own canvas machinery, so it is cleared, repositioned and scaled with the map.
+  function drawLocal() {
+    const items = this.items || [];
+    if (!items.length) return;
+    const map2 = this._map, ctx = this._ctx, b = this._bounds;
+    const sc = map2.getZoomScale(map2.getZoom(), 0), o = map2.getPixelOrigin();
+    for (const it of items) {
+      if (it.bb[2] * sc - o.x < b.min.x || it.bb[0] * sc - o.x > b.max.x || it.bb[3] * sc - o.y < b.min.y || it.bb[1] * sc - o.y > b.max.y) continue;
+      const style = it.style(this.mode);
+      ctx.save();
+      ctx.beginPath();
+      for (const part of it.parts) for (const ring of part.rings) {                    // the electorate's outline is the clip
+        let lx = 0, ly = 0;
+        for (let i = 0; i < ring.length; i += 2) {
+          const x = ring[i] * sc - o.x, y = ring[i + 1] * sc - o.y;
+          if (i === 0) ctx.moveTo(x, y);
+          else if (Math.abs(x - lx) >= 0.4 || Math.abs(y - ly) >= 0.4) ctx.lineTo(x, y); else continue;
+          lx = x; ly = y;
+        }
+        ctx.closePath();
+      }
+      ctx.clip('evenodd');
+      for (const cell of it.cells) {
+        const st = style.get(cell.area);
+        if (!st) continue;
+        ctx.beginPath();
+        cell.pts.forEach((v, k) => { const x = v[0] * sc - o.x, y = v[1] * sc - o.y; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+        ctx.closePath();
+        ctx.globalAlpha = st.op; ctx.fillStyle = st.color; ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      for (const e of it.borders) { ctx.moveTo(e[0] * sc - o.x, e[1] * sc - o.y); ctx.lineTo(e[2] * sc - o.x, e[3] * sc - o.y); }
+      ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.9; ctx.stroke();
+      if (this.hover && this.hover.it === it) {                                        // the area under the mouse
+        ctx.beginPath();
+        for (const e of it.borders) if (e[4] === this.hover.area) { ctx.moveTo(e[0] * sc - o.x, e[1] * sc - o.y); ctx.lineTo(e[2] * sc - o.x, e[3] * sc - o.y); }
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.4; ctx.stroke();
+      }
+      ctx.restore();
+    }
   }
+
+  function hideLocalTip() {
+    if (localTip) { try { map.removeLayer(localTip); } catch { /* not open */ } }
+    if (localHover && localRenderer) { localHover = null; localRenderer.hover = null; localRenderer._redraw(); }
+    localHover = null;
+  }
+  // The areas ignore the mouse (so they can never block a click); hover is worked out from the map's own mouse position.
   function onLocalMove(e) {
     localMoveAt = e.latlng;
     if (localMoveTimer) return;
     localMoveTimer = setTimeout(() => {
       localMoveTimer = 0;
-      const ll = localMoveAt;
-      if (!ll || !localHits.length) return;
-      const x = ll.lng, y = ll.lat;
-      let hit = null;
-      for (const h of localHits) {
-        if (x < h.bb[0] || x > h.bb[2] || y < h.bb[1] || y > h.bb[3]) continue;
-        if (h.pts.some(r => ringHas(r, x, y))) { hit = h; break; }
+      const ll = localMoveAt, rd = localRenderer;
+      if (!ll || !rd) return;
+      const p = map.project(ll, 0);
+      let found = null;
+      for (const it of rd.items) {
+        if (p.x < it.bb[0] || p.x > it.bb[2] || p.y < it.bb[1] || p.y > it.bb[3] || !inParts(it.parts, p.x, p.y)) continue;
+        let best = Infinity, area = null;
+        for (const c of it.cells) { const d2 = (c.sx - p.x) ** 2 + (c.sy - p.y) ** 2; if (d2 < best) { best = d2; area = c.area; } }
+        const info = area && it.style(rd.mode).get(area);
+        if (info) { found = { it, area, html: (rd.items.length > 1 ? `<small>${esc(it.name)}</small><br>` : '') + info.html }; }
+        break;
       }
-      if (!hit) { hideLocalTip(); return; }
-      if (hit !== localHover) {
-        if (localHover) localHover.poly.setStyle({ weight: 0.8, opacity: 0.55 });
-        hit.poly.setStyle({ weight: 2.2, opacity: 1 });
-        localHover = hit;
-      }
+      if (!found) { hideLocalTip(); return; }
+      if (!localHover || localHover.it !== found.it || localHover.area !== found.area) { localHover = found; rd.hover = found; rd._redraw(); }
       if (!localTip) localTip = L.tooltip({ className: 'rdl-tip', direction: 'top', offset: [0, -4], opacity: 1 });
-      localTip.setContent(hit.html).setLatLng(ll);
+      localTip.setContent(found.html).setLatLng(ll);
       if (!map.hasLayer(localTip)) localTip.addTo(map);
     }, 30);
   }
+
   function dropLocalLayer() {
     hideLocalTip();
-    if (localLayer) { localLayer.remove(); localLayer = null; }
-    localLayerKey = ''; localHits = [];
+    if (localRenderer) { try { map.removeLayer(localRenderer); } catch { /* gone */ } localRenderer = null; }
+    localKey = '';
     try { map.off('mousemove', onLocalMove).off('mouseout', hideLocalTip); } catch { /* no map */ }
   }
+  const syncLocalMapSoon = () => { clearTimeout(localSyncTimer); localSyncTimer = setTimeout(() => { try { syncLocalMap(); } catch { /* ignore */ } }, 60); };
+
+  function syncLocalMap() {
+    let names = [];
+    try {
+      if (ds() === 'EC_LIVE_2026' && !document.body.classList.contains('rd-tv') && typeof map !== 'undefined') {
+        if (localMapOn) names = features().map(f => f.live.electorate_name);              // every electorate on the map
+        else { const sel = selectedElectorate(); if (sel) names = [sel.name]; }             // just the open one
+      }
+    } catch { /* not ready */ }
+    const items = [];
+    for (const nm of names) {
+      const d = localFor(nm);                                                              // unpacks on first use, then calls back
+      if (!d || d === 'none' || d === 'loading') continue;
+      let it = localItems.get(nm);
+      if (!it) { it = buildLocalItem(nm, d); if (it) localItems.set(nm, it); }
+      if (it) items.push(it);
+    }
+    if (!items.length) { dropLocalLayer(); return; }
+    const mode = viewMode(), key = items.map(i => i.name).join('|') + '#' + mode;
+    if (key === localKey && localRenderer && map.hasLayer(localRenderer)) return;
+    if (!localRenderer) {
+      if (!map.getPane('rdLocal')) { map.createPane('rdLocal'); map.getPane('rdLocal').style.zIndex = 460; }
+      map.getPane('rdLocal').style.pointerEvents = 'none';
+      const Regions = L.Canvas.extend({ _draw: drawLocal });
+      localRenderer = new Regions({ pane: 'rdLocal', padding: 0.3 });
+      map.addLayer(localRenderer);
+      map.on('mousemove', onLocalMove).on('mouseout', hideLocalTip);
+    }
+    localRenderer.items = items; localRenderer.mode = mode; localRenderer.hover = null; localHover = null;
+    localKey = key;
+    localRenderer._redraw();
+  }
+
   function toggleLocalMap() {
     localMapOn = !localMapOn;
     store.set('rd-local-map', localMapOn);
-    try { renderTools(); ensureAreasBtn(); renderPanel(); decorateLocalOld(); syncLocalMap(); } catch { /* ignore */ }
+    try { renderTools(); ensureAreasBtn(); syncLocalMap(); } catch { /* ignore */ }
   }
   // Old design: a button in the site's side controls, next to Coalition.
   function ensureAreasBtn() {
@@ -1846,53 +1951,13 @@
       b = el('button', 'map-icon-button rd-areas-btn');
       b.type = 'button';
       b.dataset.mapIcon = 'rdAreas';
-      b.title = 'Show areas on the map (approximate)';
+      b.title = 'Show all areas on map';
       b.innerHTML = ICON.areas.replace('<svg ', '<svg width="20" height="20" ') + '<span>Areas</span>';
       b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); toggleLocalMap(); });
       dock.insertBefore(b, dock.querySelector('.rd-coal-btn'));
     }
     b.classList.toggle('active', localMapOn);
     b.setAttribute('aria-pressed', String(localMapOn));
-  }
-
-  function syncLocalMap() {
-    let want = null;
-    try {
-      if (localMapOn && ds() === 'EC_LIVE_2026' && !document.body.classList.contains('rd-tv') && typeof map !== 'undefined') {
-        const sel = selectedElectorate();
-        const d = sel && localData.get(slugOf(sel.name));
-        if (sel && d && typeof d === 'object') want = { sel, d };
-      }
-    } catch { /* not ready */ }
-    if (!want) { dropLocalLayer(); return; }
-    const mode = viewMode(), slug = slugOf(want.sel.name), key = slug + '|' + mode;
-    if (key === localLayerKey && localLayer && map.hasLayer(localLayer)) return;
-    const an = localAnalysis(want.d, mode, want.sel.live);
-    const g = an && localGeoFor(slug, want.sel.name, want.d);
-    if (!g || !g.seeds.length) return;
-    const cells = localCells(g);
-    dropLocalLayer();
-    if (!map.getPane('rdLocal')) { map.createPane('rdLocal'); map.getPane('rdLocal').style.zIndex = 460; }
-    map.getPane('rdLocal').style.pointerEvents = 'none';
-    const layer = L.layerGroup(), hits = [];
-    for (const a of an.areas) {
-      const rings = cells.get(a.name);
-      if (!rings || !rings.length) continue;
-      const share = Math.max(0, Math.min(1, (a.share - 0.3) / 0.4));       // 30% of the vote = faint, 70% = strong
-      const poly = L.polygon(rings.map(r => [r]), {
-        pane: 'rdLocal', color: '#ffffff', weight: 0.8, opacity: 0.55, fillColor: an.cols[a.i].color, fillOpacity: 0.32 + 0.5 * share,
-        interactive: false,                                                  // clicks go to the site's own layers underneath
-      });
-      layer.addLayer(poly);
-      const pts = rings.map(r => r.map(q => [q[1], q[0]]));                    // [lon, lat] for the hover test
-      let bx0 = 1e9, by0 = 1e9, bx1 = -1e9, by1 = -1e9;
-      for (const r of pts) for (const q of r) { if (q[0] < bx0) bx0 = q[0]; if (q[0] > bx1) bx1 = q[0]; if (q[1] < by0) by0 = q[1]; if (q[1] > by1) by1 = q[1]; }
-      hits.push({ poly, pts, bb: [bx0, by0, bx1, by1],
-        html: `<b>${esc(a.name)}</b><br>${esc(an.cols[a.i].label)} ${(a.share * 100).toFixed(0)}%<br>${fmt(a.total)} votes · ${a.places} voting place${a.places === 1 ? '' : 's'}` });
-    }
-    layer.addTo(map);
-    localLayer = layer; localLayerKey = key; localHits = hits;
-    map.on('mousemove', onLocalMove).on('mouseout', hideLocalTip);
   }
 
   // Old design: the site's own panel is showing, so add the section to it.

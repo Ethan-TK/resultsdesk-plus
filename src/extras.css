@@ -727,3 +727,28 @@ body.rd-light .legal-settings-list .legal-settings-row:last-child { border-botto
 .legal-settings-body > :not(.rd-set):not(.legal-settings-help-toggle):not(.legal-settings-help) { display: none !important; }
 .legal-settings-help ul { margin: 6px 0 10px; padding-left: 18px; }
 .legal-settings-help li { margin: 0 0 5px; }
+
+/* ---------- TV mode in the new design ---------- */
+html body.rd-clean.rd-tv.rd-tv.rd-tv #mapWrap { background: var(--n-map) !important; }
+html body.rd-clean.rd-tv .rd-tv-panel {
+  background: var(--n-bg); color: var(--n-text); border-left: 1px solid var(--n-line);
+  font-family: var(--n-font); font-weight: 500; gap: 1.6vh; padding: 3vh 1.8vw;
+}
+html body.rd-clean.rd-tv .rd-tv-title { font-weight: 700; letter-spacing: -.02em; }
+html body.rd-clean.rd-tv .rd-tv-sub, html body.rd-clean.rd-tv .rd-tv-coal-head, html body.rd-clean.rd-tv .rd-ticker-item small { color: var(--n-muted); }
+html body.rd-clean.rd-tv .rd-tv-sub b { color: var(--n-accent); font-weight: 600; }
+html body.rd-clean.rd-tv .rd-tv-actions button { font-family: var(--n-font); font-weight: 600; border: 1px solid var(--n-line-2); border-radius: 999px; background: var(--n-surface); color: var(--n-text); padding: .35em .9em; }
+html body.rd-clean.rd-tv .rd-tv-actions button:hover { background: var(--n-surface-3); }
+html body.rd-clean.rd-tv .rd-tv-row { font-weight: 600; }
+html body.rd-clean.rd-tv .rd-tv-row strong { font-weight: 700; font-variant-numeric: tabular-nums; }
+html body.rd-clean.rd-tv .rd-tv-bar { height: .7em; border-radius: 999px; background: var(--n-surface-2); overflow: hidden; }
+html body.rd-clean.rd-tv .rd-tv-bar i { border-radius: 999px; }
+html body.rd-clean.rd-tv .rd-tv-coal, html body.rd-clean.rd-tv .rd-tv-ticker-label { border-top: 1px solid var(--n-line); }
+html body.rd-clean.rd-tv .rd-tv-ticker-label { color: var(--n-faint); font-weight: 600; letter-spacing: .08em; }
+html body.rd-clean.rd-tv .rd-tv-coal .rd-bloc-bar { height: .9em; border-radius: 999px; overflow: hidden; }
+html body.rd-clean.rd-tv .rd-tv-coal .rd-bloc-bar i { background: var(--n-text); }
+html body.rd-clean.rd-tv .rd-ticker-item span:not(.rd-dot) { color: var(--n-soft); }
+html body.rd-clean.rd-tv .rd-legend, html body.rd-clean.rd-tv .rd-pin-chip { background: var(--n-surface); border-color: var(--n-line); border-radius: var(--n-r-sm); }
+.rd-tv-actions button[aria-pressed="true"] { background: var(--n-text, #fff) !important; color: var(--n-bg, #000) !important; }
+.rd-tv-top { flex-direction: column; }
+.rd-tv-actions { flex-wrap: wrap; }

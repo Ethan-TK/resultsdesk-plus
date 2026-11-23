@@ -415,6 +415,7 @@
     const body = document.body;
     if (on === body.classList.contains('rd-tv')) return;
     body.classList.toggle('rd-tv', on);
+    setTimeout(() => { try { syncLocalMapSoon(); } catch { /* map not ready */ } }, 300);
     if (on) {
       if (!$('#rdTv')) {
         const tv = el('div', 'rd-tv-panel');
@@ -424,6 +425,7 @@
           const a = e.target.closest('[data-tv]');
           if (!a) return;
           if (a.dataset.tv === 'exit') setTv(false);
+          if (a.dataset.tv === 'areas') { toggleLocalMap(); renderSeatsUi(); }
           if (a.dataset.tv === 'cycle') { tvCycle = !tvCycle; renderSeatsUi(); }
         });
       }
@@ -465,7 +467,7 @@
       <div class="rd-tv-top">
         <div><div class="rd-tv-title">NZ Election ${esc(String(ds()).match(/\d{4}/)?.[0] || '')}</div>
         <div class="rd-tv-sub">${pct == null ? '' : `${pct.toFixed(1)}% of voting places counted · `}${spec && !spec.counted ? `<b>${fmt(spec.left)} special votes not counted yet</b> (official result ${OFFICIAL_RESULTS_LABEL}) · ` : ''}<span class="rd-tv-clock">${new Date().toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })}</span></div></div>
-        <div class="rd-tv-actions"><button data-tv="cycle" type="button">${tvCycle ? 'Auto-tour on' : 'Auto-tour off'}</button><button data-tv="exit" type="button">Exit ✕</button></div>
+        <div class="rd-tv-actions"><button data-tv="areas" type="button" aria-pressed="${localMapOn}">Suburbs ${localMapOn ? 'on' : 'off'}</button><button data-tv="cycle" type="button">${tvCycle ? 'Auto-tour on' : 'Auto-tour off'}</button><button data-tv="exit" type="button">Exit ✕</button></div>
       </div>
       <div class="rd-tv-seats">${rows || '<div class="rd-tv-sub">Waiting for seat results…</div>'}</div>
       ${st.total ? `<div class="rd-tv-coal"><div class="rd-tv-coal-head">${st.total} seats · <b>${st.majority}</b> to govern</div>${blocBarHtml(st)}
@@ -783,7 +785,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
-    ['2.8.4', ['Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off, 25 is the default) and a Light mode switch that leaves fonts and party colours alone. Help is shorter and lists what this script adds; the About and Legal parts are gone.', '“Counted tonight” now reads “Counted”.']],
+    ['2.8.4', ['Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off, 25 is the default) and a Light mode switch that leaves fonts and party colours alone. Help is shorter and lists what this script adds; the About and Legal parts are gone.', '“Counted tonight” now reads “Counted”.', 'TV mode uses the new design when it is on, and has a Suburbs button that shows every electorate’s suburbs on the TV map.']],
     ['2.8.3', ['“Areas” are now called “suburbs”, and the Suburbs button on the map always starts switched off (it is no longer remembered between visits). Opening an electorate still shows its suburbs.', 'Smoother zooming and panning with every electorate’s suburbs showing, especially in Firefox: they are redrawn once per zoom step instead of several times, drawn in far fewer steps, and the fine lines are left out when zoomed right out.', 'With suburbs showing, the diagonal “flipped” stripes are drawn over them so they stay clearly visible, and electorate borders use the same line style as the suburb borders instead of fading.']],
     ['2.8.2', ['Much smoother map: moving the mouse over the areas no longer redraws the whole map, the areas are built a few at a time so pressing the Areas button doesn’t freeze the page, and the area layer is lighter to move and zoom.']],
     ['2.8.1', ['The Electorates and Trends tabs now fill the whole window (no empty band at the bottom or gutters at the sides, and no page scroll).']],
@@ -2034,7 +2036,7 @@
   function syncLocalMap() {
     let names = [];
     try {
-      if (ds() === 'EC_LIVE_2026' && !document.body.classList.contains('rd-tv') && typeof map !== 'undefined') {
+      if (ds() === 'EC_LIVE_2026' && typeof map !== 'undefined') {
         if (localMapOn) names = features().map(f => f.live.electorate_name);              // every electorate on the map
         else { const sel = selectedElectorate(); if (sel) names = [sel.name]; }             // just the open one
       }

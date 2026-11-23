@@ -409,8 +409,8 @@ body.dashboard-body[data-dashboard-view]:not([data-dashboard-view="map"]) #rdDoc
 .rd-design-btn { display: inline-flex !important; align-items: center; gap: 7px; }
 .rd-switch { position: relative; width: 26px; height: 14px; border-radius: 7px; background: rgba(148, 163, 184, .35); transition: background .15s; flex: none; }
 .rd-switch i { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: #fff; transition: transform .15s; }
-.rd-design-btn[aria-checked="true"] .rd-switch { background: #3b82f6; }
-.rd-design-btn[aria-checked="true"] .rd-switch i { transform: translateX(12px); }
+.rd-design-btn[aria-checked="true"] .rd-switch, .rd-set-row[aria-checked="true"] .rd-switch { background: #3b82f6; }
+.rd-design-btn[aria-checked="true"] .rd-switch i, .rd-set-row[aria-checked="true"] .rd-switch i { transform: translateX(12px); }
 body.rd-tv .rd-design-btn { display: none !important; }
 
 

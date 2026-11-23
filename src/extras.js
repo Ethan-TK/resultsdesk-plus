@@ -783,6 +783,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.7.1', ['Fixed: after areas were shown on the map, clicking off a region could leave the whole map unclickable.', 'The “Show areas on the map” switch moved to the map toolbar (top right in the new design, side controls in the old), and the Local results panel is shorter: five rows to start, votes beside each name, and a one-line source.']],
     ['2.7.0', ['Local results on the map: a “Show areas on the map” switch in the Local results section splits the electorate into areas coloured by who won each (the part of the electorate nearest each area’s voting places, so approximate), with details on hover. Locations come from LINZ’s NZ Addresses data.', 'Fixed advance voting compared with election day for Papakura and Southland.']],
     ['2.6.0', ['Local results: electorate panels now show how each area and voting place voted (by area or by place, candidate or party vote, advance voting compared with election day), from the Electoral Commission’s own published results by voting place.']],
     ['2.5.0', ['Hides the site’s new “Get PRO” button, its Pro promo cards and locked Area button, and the NZ / Switzerland switch. (Pro features stay Pro.)', 'Fixes for the site’s latest update: its new Settings button is no longer hidden, and the TV mode button is back.']],
@@ -1274,6 +1275,7 @@
     people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6M12 14.5c1.1-.3 2.5-.5 4-.5 3.3 0 6 2.7 6 6"/></svg>',
   };
 
+  ICON.areas = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg>';
   // "BUTTERICK, Mike" -> "Mike Butterick"
   function personName(raw) {
     const s = String(raw || '').replace(/\*$/, '').trim();
@@ -1517,6 +1519,7 @@
         if (act === 'region') { if (arg === 'resetZoomBtn') applyBestView(true); else document.getElementById(arg)?.click(); }
         if (act === 'zoom') { try { arg === 'in' ? map.zoomIn() : map.zoomOut(); } catch { /* ignore */ } }
         if (act === 'reset') $('.rd-reset-view-btn')?.click();
+        if (act === 'areas') toggleLocalMap();
         if (act === 'coalition') toggleCoalition();
         setTimeout(() => { renderTools(); renderPanel(); }, 60);
       });
@@ -1543,6 +1546,7 @@
         <button type="button" data-t="zoom:out" title="Zoom out" aria-label="Zoom out">${ICON.minus}</button>
         <button type="button" data-t="zoom:in" title="Zoom in" aria-label="Zoom in">${ICON.plus}</button>
         <button type="button" data-t="reset:1" title="Reset view" aria-label="Reset view"${moved ? '' : ' disabled'}>${ICON.reset}</button>
+        <button type="button" data-t="areas:1" class="${localMapOn ? 'is-on' : ''}" title="Show areas on the map: split an electorate into areas coloured by who won (approximate)" aria-label="Show areas on the map" aria-pressed="${localMapOn}">${ICON.areas}</button>
         <button type="button" data-t="coalition:1" class="${coalOpen ? 'is-on' : ''}" title="Coalition tracker" aria-label="Coalition tracker" aria-pressed="${coalOpen}">${ICON.people}</button>
       </div>`);
   }
@@ -1621,11 +1625,6 @@
     const an = localAnalysis(d, mode, sel.live);
     if (!an) return '';
     const { cols, n, rows, areas } = an;
-    // how many areas can be drawn on the map (those with voting places inside this electorate)
-    let placed = null;
-    const geo = localGeoFor(slugOf(sel.name), sel.name, d);
-    if (geo) { const names = new Set(geo.seeds.map(s => s.name)); placed = areas.filter(a => names.has(a.name)).length; }
-    const mapRow = `<div class="rdl-maprow"><button type="button" class="rdl-map-toggle" role="switch" aria-checked="${localMapOn}" data-rdl="map"><span class="rd-switch" aria-hidden="true"><i></i></span><span>Show areas on the map</span></button>${placed != null ? `<small>${placed} of ${areas.length} areas</small>` : ''}</div>`;
 
     // plain-words summary: who won most areas
     const wins = new Map();
@@ -1638,9 +1637,10 @@
 
     // advance voting compared with election day
     const bySec = [0, 1].map(s => { const rs = rows.filter(r => r.sec === s); const v = sumVotes(rs, n); return { s, ...leaderOf(v) }; }).filter(x => x.total > 0);
-    const secHtml = bySec.length === 2 ? `<div class="rdl-sec">${bySec.map(x => `<div><span>${x.s === 0 ? 'Advance voting' : 'Election day'}</span><b>${fmt(x.total)}</b> votes · <i style="background:${cols[x.i].color}"></i>${esc(cols[x.i].label)} ${(x.share * 100).toFixed(0)}%</div>`).join('')}</div>` : '';
+    const secHtml = bySec.length === 2 && bySec[0].i !== bySec[1].i
+      ? `<p class="rdl-summary">Advance voting went to <b>${esc(cols[bySec[0].i].label)}</b> (${(bySec[0].share * 100).toFixed(0)}%), election day to <b>${esc(cols[bySec[1].i].label)}</b> (${(bySec[1].share * 100).toFixed(0)}%)</p>` : '';
 
-    const LIMIT = 8;
+    const LIMIT = 5;
     let list;
     if (localView === 'place') {
       const places = rows.filter(r => r.total > 0).map(r => ({ ...r, ...leaderOf(r.votes) })).sort((a, b) => b.total - a.total);
@@ -1648,19 +1648,17 @@
       list = shown.map(p => {
         const title = p.loc ? (p.venue || p.loc) : p.venue;
         const where = p.loc && p.venue ? p.loc : '';
-        return `<div class="rdl-row" style="--c:${cols[p.i].color}">
-          <div class="rdl-main"><span class="rdl-name">${esc(title)}</span><span class="rdl-win"><i></i>${esc(cols[p.i].label)} <b>${(p.share * 100).toFixed(0)}%</b></span></div>
+        return `<div class="rdl-row" style="--c:${cols[p.i].color}" title="${esc(where)}${where ? ' · ' : ''}${p.sec === 0 ? 'advance voting' : 'election day'}">
+          <div class="rdl-main"><span class="rdl-name">${esc(title)}<small>${fmt(p.total)}</small></span><span class="rdl-win"><i></i>${esc(cols[p.i].label)} <b>${(p.share * 100).toFixed(0)}%</b></span></div>
           ${localBarHtml(p.votes, cols, p.total)}
-          <div class="rdl-meta"><span>${esc(where)}${where ? ' · ' : ''}${p.sec === 0 ? 'advance' : 'election day'}</span><span>${fmt(p.total)} votes</span></div>
         </div>`;
       }).join('');
       var more = places.length - LIMIT, noun = 'places';
     } else {
       const shown = localExpanded ? areas : areas.slice(0, LIMIT);
-      list = shown.map(a => `<div class="rdl-row" style="--c:${cols[a.i].color}">
-          <div class="rdl-main"><span class="rdl-name">${esc(a.name)}</span><span class="rdl-win"><i></i>${esc(cols[a.i].label)} <b>${(a.share * 100).toFixed(0)}%</b></span></div>
+      list = shown.map(a => `<div class="rdl-row" style="--c:${cols[a.i].color}" title="${a.places} voting place${a.places === 1 ? '' : 's'}">
+          <div class="rdl-main"><span class="rdl-name">${esc(a.name)}<small>${fmt(a.total)}</small></span><span class="rdl-win"><i></i>${esc(cols[a.i].label)} <b>${(a.share * 100).toFixed(0)}%</b></span></div>
           ${localBarHtml(a.votes, cols, a.total)}
-          <div class="rdl-meta"><span>${a.places} voting place${a.places === 1 ? '' : 's'}</span><span>${fmt(a.total)} votes</span></div>
         </div>`).join('');
       var more = areas.length - LIMIT, noun = 'areas';
     }
@@ -1673,12 +1671,11 @@
           <button type="button" data-rdl="view:area" class="${localView === 'area' ? 'is-on' : ''}" aria-pressed="${localView === 'area'}">By area</button>
           <button type="button" data-rdl="view:place" class="${localView === 'place' ? 'is-on' : ''}" aria-pressed="${localView === 'place'}">By place</button>
         </span></div>
-      ${mapRow}
       ${summary ? `<p class="rdl-summary">${summary}</p>` : ''}
       ${secHtml}
       <div class="rdl-list">${list}</div>
       ${more > 0 ? `<button type="button" class="rdl-more" data-rdl="all">${localExpanded ? 'Show fewer' : `Show all ${more + LIMIT} ${noun}`}</button>` : ''}
-      <p class="rdl-src">${mode === 'partyvote' ? 'Party vote' : 'Candidate vote'}. Source: Electoral Commission, ${esc(kind.toLowerCase())}${when ? `, produced ${when}` : ''}.${prelim ? ' Special votes are not included.' : ''} Places with fewer than 6 votes show as zero.${localMapOn ? ' Map areas are approximate: the part of the electorate nearest each area’s voting places. Locations from LINZ NZ Addresses (CC BY 4.0).' : ''}</p>
+      <p class="rdl-src" title="Places with fewer than 6 votes show as zero. Map areas are the part of the electorate nearest each area’s voting places, so they are approximate.">Electoral Commission ${esc(kind.toLowerCase())}${when ? ` (${when})` : ''}${prelim ? ', before special votes' : ''}.${localMapOn ? ' Map locations: LINZ NZ Addresses (CC BY 4.0).' : ''}</p>
     </section>`;
   }
 
@@ -1798,6 +1795,66 @@
     return cells;
   }
 
+  // Hover details for the areas. The areas themselves ignore the mouse (so they can never block a click), so the map's
+  // own mouse position is tested against them here.
+  let localHits = [], localHover = null, localTip = null, localMoveTimer = 0, localMoveAt = null;
+  function hideLocalTip() {
+    if (localHover) { try { localHover.poly.setStyle({ weight: 0.8, opacity: 0.55 }); } catch { /* removed */ } localHover = null; }
+    if (localTip) { try { map.removeLayer(localTip); } catch { /* not open */ } }
+  }
+  function onLocalMove(e) {
+    localMoveAt = e.latlng;
+    if (localMoveTimer) return;
+    localMoveTimer = setTimeout(() => {
+      localMoveTimer = 0;
+      const ll = localMoveAt;
+      if (!ll || !localHits.length) return;
+      const x = ll.lng, y = ll.lat;
+      let hit = null;
+      for (const h of localHits) {
+        if (x < h.bb[0] || x > h.bb[2] || y < h.bb[1] || y > h.bb[3]) continue;
+        if (h.pts.some(r => ringHas(r, x, y))) { hit = h; break; }
+      }
+      if (!hit) { hideLocalTip(); return; }
+      if (hit !== localHover) {
+        if (localHover) localHover.poly.setStyle({ weight: 0.8, opacity: 0.55 });
+        hit.poly.setStyle({ weight: 2.2, opacity: 1 });
+        localHover = hit;
+      }
+      if (!localTip) localTip = L.tooltip({ className: 'rdl-tip', direction: 'top', offset: [0, -4], opacity: 1 });
+      localTip.setContent(hit.html).setLatLng(ll);
+      if (!map.hasLayer(localTip)) localTip.addTo(map);
+    }, 30);
+  }
+  function dropLocalLayer() {
+    hideLocalTip();
+    if (localLayer) { localLayer.remove(); localLayer = null; }
+    localLayerKey = ''; localHits = [];
+    try { map.off('mousemove', onLocalMove).off('mouseout', hideLocalTip); } catch { /* no map */ }
+  }
+  function toggleLocalMap() {
+    localMapOn = !localMapOn;
+    store.set('rd-local-map', localMapOn);
+    try { renderTools(); ensureAreasBtn(); renderPanel(); decorateLocalOld(); syncLocalMap(); } catch { /* ignore */ }
+  }
+  // Old design: a button in the site's side controls, next to Coalition.
+  function ensureAreasBtn() {
+    const dock = $('#mapMagicWallControlsRail .map-icon-dock');
+    if (!dock) return;
+    let b = dock.querySelector('.rd-areas-btn');
+    if (!b) {
+      b = el('button', 'map-icon-button rd-areas-btn');
+      b.type = 'button';
+      b.dataset.mapIcon = 'rdAreas';
+      b.title = 'Show areas on the map (approximate)';
+      b.innerHTML = ICON.areas.replace('<svg ', '<svg width="20" height="20" ') + '<span>Areas</span>';
+      b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); toggleLocalMap(); });
+      dock.insertBefore(b, dock.querySelector('.rd-coal-btn'));
+    }
+    b.classList.toggle('active', localMapOn);
+    b.setAttribute('aria-pressed', String(localMapOn));
+  }
+
   function syncLocalMap() {
     let want = null;
     try {
@@ -1807,30 +1864,35 @@
         if (sel && d && typeof d === 'object') want = { sel, d };
       }
     } catch { /* not ready */ }
-    if (!want) { if (localLayer) { localLayer.remove(); localLayer = null; } localLayerKey = ''; return; }
+    if (!want) { dropLocalLayer(); return; }
     const mode = viewMode(), slug = slugOf(want.sel.name), key = slug + '|' + mode;
     if (key === localLayerKey && localLayer && map.hasLayer(localLayer)) return;
     const an = localAnalysis(want.d, mode, want.sel.live);
     const g = an && localGeoFor(slug, want.sel.name, want.d);
     if (!g || !g.seeds.length) return;
     const cells = localCells(g);
-    if (localLayer) localLayer.remove();
+    dropLocalLayer();
     if (!map.getPane('rdLocal')) { map.createPane('rdLocal'); map.getPane('rdLocal').style.zIndex = 460; }
-    const layer = L.layerGroup();
+    map.getPane('rdLocal').style.pointerEvents = 'none';
+    const layer = L.layerGroup(), hits = [];
     for (const a of an.areas) {
       const rings = cells.get(a.name);
       if (!rings || !rings.length) continue;
       const share = Math.max(0, Math.min(1, (a.share - 0.3) / 0.4));       // 30% of the vote = faint, 70% = strong
       const poly = L.polygon(rings.map(r => [r]), {
         pane: 'rdLocal', color: '#ffffff', weight: 0.8, opacity: 0.55, fillColor: an.cols[a.i].color, fillOpacity: 0.32 + 0.5 * share,
-        bubblingMouseEvents: false,
+        interactive: false,                                                  // clicks go to the site's own layers underneath
       });
-      poly.bindTooltip(`<b>${esc(a.name)}</b><br>${esc(an.cols[a.i].label)} ${(a.share * 100).toFixed(0)}%<br>${fmt(a.total)} votes · ${a.places} voting place${a.places === 1 ? '' : 's'}`, { sticky: true, className: 'rdl-tip' });
-      poly.on('mouseover', () => poly.setStyle({ weight: 2.2, opacity: 1 })).on('mouseout', () => poly.setStyle({ weight: 0.8, opacity: 0.55 }));
       layer.addLayer(poly);
+      const pts = rings.map(r => r.map(q => [q[1], q[0]]));                    // [lon, lat] for the hover test
+      let bx0 = 1e9, by0 = 1e9, bx1 = -1e9, by1 = -1e9;
+      for (const r of pts) for (const q of r) { if (q[0] < bx0) bx0 = q[0]; if (q[0] > bx1) bx1 = q[0]; if (q[1] < by0) by0 = q[1]; if (q[1] > by1) by1 = q[1]; }
+      hits.push({ poly, pts, bb: [bx0, by0, bx1, by1],
+        html: `<b>${esc(a.name)}</b><br>${esc(an.cols[a.i].label)} ${(a.share * 100).toFixed(0)}%<br>${fmt(a.total)} votes · ${a.places} voting place${a.places === 1 ? '' : 's'}` });
     }
     layer.addTo(map);
-    localLayer = layer; localLayerKey = key;
+    localLayer = layer; localLayerKey = key; localHits = hits;
+    map.on('mousemove', onLocalMove).on('mouseout', hideLocalTip);
   }
 
   // Old design: the site's own panel is showing, so add the section to it.
@@ -1840,10 +1902,12 @@
     const sel = panel && !document.body.classList.contains('rd-own-panel') && !document.body.classList.contains('rd-tv') ? selectedElectorate() : null;
     const html = sel ? localSectionHtml(sel) : '';
     if (!html) { box?.remove(); return; }
-    const anchor = panel.querySelector('.popup .popup-footer') || panel.querySelector('.popup');
-    if (!anchor) return;
+    const pop = panel.querySelector('.popup');
+    if (!pop) return;
     if (!box) { box = el('div', 'rdl-old'); box.id = 'rdLocalOld'; }
-    if (box.parentElement !== anchor.parentElement || box.nextElementSibling !== anchor) anchor.insertAdjacentElement('beforebegin', box);
+    const foot = pop.querySelector('.popup-footer');                 // some panels have a footer; the electorate panel does not
+    if (foot) { if (box.parentElement !== pop || box.nextElementSibling !== foot) foot.insertAdjacentElement('beforebegin', box); }
+    else if (box.parentElement !== pop || box.nextElementSibling) pop.appendChild(box);
     setHtml(box, html);
   }
   document.addEventListener('click', e => {
@@ -1853,7 +1917,6 @@
     const [act, arg] = a.dataset.rdl.split(':');
     if (act === 'view') { localView = arg === 'place' ? 'place' : 'area'; store.set('rd-local-view', localView); localExpanded = false; }
     if (act === 'all') localExpanded = !localExpanded;
-    if (act === 'map') { localMapOn = !localMapOn; store.set('rd-local-map', localMapOn); }
     try { renderPanel(); decorateLocalOld(); syncLocalMap(); } catch { /* ignore */ }
   }, true);
 
@@ -1926,7 +1989,7 @@
     hideUpsells();
     // The site changes the page many times a second (animated numbers, map redraws). Run our
     // upkeep at most once per 120 ms: straight away if it has been quiet, otherwise once at the end.
-    const upkeep = () => { decorateLocalOld(); syncLocalMap(); hideUpsells(); ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); };
+    const upkeep = () => { decorateLocalOld(); syncLocalMap(); hideUpsells(); ensureCoalitionUi(); ensureAreasBtn(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); };
     let upkeepAt = 0, upkeepTimer = null;
     const runUpkeep = () => { upkeepTimer = null; upkeepAt = Date.now(); try { upkeep(); } catch (err) { console.warn('[ResultsDesk Plus] upkeep', err); } };
     new MutationObserver(() => {

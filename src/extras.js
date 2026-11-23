@@ -783,6 +783,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.6.0', ['Local results: electorate panels now show how each area and voting place voted (by area or by place, candidate or party vote, advance voting compared with election day), from the Electoral Commission’s own published results by voting place.']],
     ['2.5.0', ['Hides the site’s new “Get PRO” button, its Pro promo cards and locked Area button, and the NZ / Switzerland switch. (Pro features stay Pro.)', 'Fixes for the site’s latest update: its new Settings button is no longer hidden, and the TV mode button is back.']],
     ['2.4.1', ['New design: removed the seats box from the top of the New Zealand panel.']],
     ['2.4.0', ['Faster and lighter: the full results file is no longer re-downloaded every 5 seconds (a tiny check still spots new results within a second), the script starts sooner, and it does far less work while the page updates.', 'New design: the arrow that hides and shows the top bar is visible again.']],
@@ -1444,7 +1445,7 @@
       </header>
       ${est > 0 ? `<div class="rdn-note${close ? ' is-warn' : ''}" title="Estimate from the national rate of special votes; the real number varies by electorate"><i></i><span>About <b>${fmt(est)}</b> special votes still to count${close ? `<small>The lead of ${fmt(margin)} could change</small>` : ''}</span></div>` : ''}
       <div class="rdn-cols"><span>${pv ? 'Party' : 'Candidate'}</span><span>Share of votes</span><span>Votes</span></div>
-      <div class="rdn-list">${list || '<div class="rdn-empty">No votes counted yet</div>'}${moreHtml(entries.length - LIMIT)}</div>
+      <div class="rdn-list">${list || '<div class="rdn-empty">No votes counted yet</div>'}${moreHtml(entries.length - LIMIT)}${localSectionHtml({ name, live })}</div>
       <footer class="rdn-foot"><span>${fmt(total)} votes</span>${Number.isFinite(turnout) && turnout > 0 ? `<span>${turnout.toFixed(1)}% turnout</span>` : ''}<span>▲▼ compared with the last election</span></footer>`;
   }
 
@@ -1554,6 +1555,168 @@
   window.addEventListener('resize', () => setTimeout(renderNewUi, 0));
 
   // ---------------------------------------------------------------------------
+  // 20. Local results: how each area and voting place voted (2026 live only).
+  // The Electoral Commission publishes votes by voting place as one PDF per electorate; they were turned into
+  // data by tools/build_local_data.py and travel inside this script as RD_LOCAL_DATA (the site's security
+  // policy stops the page loading them from elsewhere). An electorate is unpacked when it is first opened.
+  // ---------------------------------------------------------------------------
+  const localData = new Map();                              // slug -> data | 'loading' | 'none'
+  let localView = store.get('rd-local-view', 'area');       // 'area' | 'place'
+  let localExpanded = false;
+  const MOBILE_TEAMS = 'Hospitals, care homes and mobile teams';
+  const slugOf = name => String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const asciiUpper = s => String(s || '').normalize('NFD').replace(/[^A-Za-z]/g, '').toUpperCase();
+
+  async function unpackLocal(b64) {
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+    return JSON.parse(await new Response(stream).text());
+  }
+  function localFor(name) {
+    if (ds() !== 'EC_LIVE_2026' || typeof RD_LOCAL_DATA === 'undefined') return null;
+    const slug = slugOf(name);
+    const have = localData.get(slug);
+    if (have) return have;
+    if (!RD_LOCAL_DATA[slug] || typeof DecompressionStream === 'undefined') { localData.set(slug, 'none'); return 'none'; }
+    localData.set(slug, 'loading');
+    unpackLocal(RD_LOCAL_DATA[slug])
+      .then(d => localData.set(slug, d), () => localData.set(slug, 'none'))
+      .then(() => { try { renderPanel(); decorateLocalOld(); } catch { /* ignore */ } });
+    return 'loading';
+  }
+
+  // One entry per column of the vote table: a candidate or a party, with its name and colour.
+  function localColumns(d, mode, live) {
+    if (mode === 'partyvote') return d.P.map(p => ({ label: partyLabel(p), sub: '', color: uiColor(p) }));
+    const entries = Array.isArray(live?.candidate_entries) ? live.candidate_entries : [];
+    return d.C.map(([party, sur]) => {
+      const e = entries.find(x => asciiUpper(String(x.candidate_name).split(',')[0]) === sur && (!party || x.party === party)) || entries.find(x => asciiUpper(String(x.candidate_name).split(',')[0]) === sur);
+      const label = e ? personName(e.candidate_name) : sur.charAt(0) + sur.slice(1).toLowerCase();
+      return { label, sub: party ? partyLabel(party) : '', color: uiColor(party || 'INDEPENDENT') };
+    });
+  }
+  const sumVotes = (rows, n) => { const v = new Array(n).fill(0); for (const r of rows) for (let i = 0; i < n; i++) v[i] += r.votes[i] || 0; return v; };
+  function leaderOf(votes) {
+    let best = -1, total = 0;
+    votes.forEach((x, i) => { total += x; if (best < 0 || x > votes[best]) best = i; });
+    return { i: best, total, share: total > 0 && best >= 0 ? votes[best] / total : 0, top: best >= 0 ? votes[best] : 0 };
+  }
+  const SHORT_MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function localBarHtml(votes, cols, total) {
+    if (!(total > 0)) return '<span class="rdl-bar is-empty"></span>';
+    const order = votes.map((v, i) => i).sort((a, b) => votes[b] - votes[a]);
+    const top = order.slice(0, 3).filter(i => votes[i] > 0);
+    const rest = total - top.reduce((s, i) => s + votes[i], 0);
+    const seg = (w, c, t) => `<i style="width:${(w * 100).toFixed(2)}%;background:${c}" title="${esc(t)}"></i>`;
+    return `<span class="rdl-bar">${top.map(i => seg(votes[i] / total, cols[i].color, `${cols[i].label} ${(votes[i] / total * 100).toFixed(0)}%`)).join('')}${rest > 0 ? seg(rest / total, 'var(--l-faint)', `Others ${(rest / total * 100).toFixed(0)}%`) : ''}</span>`;
+  }
+
+  function localSectionHtml(sel) {
+    const d = localFor(sel.name);
+    if (!d || d === 'none') return '';
+    if (d === 'loading') return '<section class="rdl"><div class="rdl-head"><h4>Local results</h4></div><div class="rdl-empty">Loading…</div></section>';
+    const mode = viewMode();
+    const cols = localColumns(d, mode, sel.live);
+    const n = cols.length;
+    const rows = d.R.map(([loc, venue, sec, pv, cv]) => {
+      const votes = mode === 'partyvote' ? pv : cv;
+      return { loc, venue, sec, votes, total: votes.reduce((a, b) => a + b, 0) };
+    });
+    const all = sumVotes(rows, n);
+    if (!(all.reduce((a, b) => a + b, 0) > 0)) return '';
+
+    // group voting places into areas (suburb or town); care-home and hospital teams go together
+    const groups = new Map();
+    for (const r of rows) {
+      const key = r.loc || MOBILE_TEAMS;
+      if (!groups.has(key)) groups.set(key, { name: key, rows: [] });
+      groups.get(key).rows.push(r);
+    }
+    const areas = [...groups.values()].map(g => {
+      const votes = sumVotes(g.rows, n);
+      return { name: g.name, places: g.rows.length, votes, ...leaderOf(votes) };
+    }).filter(a => a.total > 0).sort((a, b) => b.total - a.total);
+
+    // plain-words summary: who won most areas
+    const wins = new Map();
+    for (const a of areas) wins.set(a.i, (wins.get(a.i) || 0) + 1);
+    const ranked = [...wins.entries()].sort((a, b) => b[1] - a[1]);
+    const pick = ranked.slice(0, 3).map(([i, c]) => `<b>${esc(cols[i].label)}</b> ${c}`).join(' · ');
+    const summary = areas.length > 1
+      ? `Winner of each of the ${areas.length} areas: ${pick}${ranked.length > 3 ? ' …' : ''}`
+      : '';
+
+    // advance voting compared with election day
+    const bySec = [0, 1].map(s => { const rs = rows.filter(r => r.sec === s); const v = sumVotes(rs, n); return { s, ...leaderOf(v) }; }).filter(x => x.total > 0);
+    const secHtml = bySec.length === 2 ? `<div class="rdl-sec">${bySec.map(x => `<div><span>${x.s === 0 ? 'Advance voting' : 'Election day'}</span><b>${fmt(x.total)}</b> votes · <i style="background:${cols[x.i].color}"></i>${esc(cols[x.i].label)} ${(x.share * 100).toFixed(0)}%</div>`).join('')}</div>` : '';
+
+    const LIMIT = 8;
+    let list;
+    if (localView === 'place') {
+      const places = rows.filter(r => r.total > 0).map(r => ({ ...r, ...leaderOf(r.votes) })).sort((a, b) => b.total - a.total);
+      const shown = localExpanded ? places : places.slice(0, LIMIT);
+      list = shown.map(p => {
+        const title = p.loc ? (p.venue || p.loc) : p.venue;
+        const where = p.loc && p.venue ? p.loc : '';
+        return `<div class="rdl-row" style="--c:${cols[p.i].color}">
+          <div class="rdl-main"><span class="rdl-name">${esc(title)}</span><span class="rdl-win"><i></i>${esc(cols[p.i].label)} <b>${(p.share * 100).toFixed(0)}%</b></span></div>
+          ${localBarHtml(p.votes, cols, p.total)}
+          <div class="rdl-meta"><span>${esc(where)}${where ? ' · ' : ''}${p.sec === 0 ? 'advance' : 'election day'}</span><span>${fmt(p.total)} votes</span></div>
+        </div>`;
+      }).join('');
+      var more = places.length - LIMIT, noun = 'places';
+    } else {
+      const shown = localExpanded ? areas : areas.slice(0, LIMIT);
+      list = shown.map(a => `<div class="rdl-row" style="--c:${cols[a.i].color}">
+          <div class="rdl-main"><span class="rdl-name">${esc(a.name)}</span><span class="rdl-win"><i></i>${esc(cols[a.i].label)} <b>${(a.share * 100).toFixed(0)}%</b></span></div>
+          ${localBarHtml(a.votes, cols, a.total)}
+          <div class="rdl-meta"><span>${a.places} voting place${a.places === 1 ? '' : 's'}</span><span>${fmt(a.total)} votes</span></div>
+        </div>`).join('');
+      var more = areas.length - LIMIT, noun = 'areas';
+    }
+    const kind = String(d.k || 'Preliminary results');
+    const when = d.p ? `${+d.p.slice(8, 10)} ${SHORT_MONTH[+d.p.slice(5, 7) - 1] || ''}` : '';
+    const prelim = /prelim/i.test(kind);
+    return `<section class="rdl">
+      <div class="rdl-head"><h4>Local results</h4>
+        <span class="rdl-seg" role="group" aria-label="Group by">
+          <button type="button" data-rdl="view:area" class="${localView === 'area' ? 'is-on' : ''}" aria-pressed="${localView === 'area'}">By area</button>
+          <button type="button" data-rdl="view:place" class="${localView === 'place' ? 'is-on' : ''}" aria-pressed="${localView === 'place'}">By place</button>
+        </span></div>
+      ${summary ? `<p class="rdl-summary">${summary}</p>` : ''}
+      ${secHtml}
+      <div class="rdl-list">${list}</div>
+      ${more > 0 ? `<button type="button" class="rdl-more" data-rdl="all">${localExpanded ? 'Show fewer' : `Show all ${more + LIMIT} ${noun}`}</button>` : ''}
+      <p class="rdl-src">${mode === 'partyvote' ? 'Party vote' : 'Candidate vote'}. Source: Electoral Commission, ${esc(kind.toLowerCase())}${when ? `, produced ${when}` : ''}.${prelim ? ' Special votes are not included.' : ''} Places with fewer than 6 votes show as zero.</p>
+    </section>`;
+  }
+
+  // Old design: the site's own panel is showing, so add the section to it.
+  function decorateLocalOld() {
+    const panel = $('#mapDetailPanel');
+    let box = $('#rdLocalOld');
+    const sel = panel && !document.body.classList.contains('rd-own-panel') && !document.body.classList.contains('rd-tv') ? selectedElectorate() : null;
+    const html = sel ? localSectionHtml(sel) : '';
+    if (!html) { box?.remove(); return; }
+    const anchor = panel.querySelector('.popup .popup-footer') || panel.querySelector('.popup');
+    if (!anchor) return;
+    if (!box) { box = el('div', 'rdl-old'); box.id = 'rdLocalOld'; }
+    if (box.parentElement !== anchor.parentElement || box.nextElementSibling !== anchor) anchor.insertAdjacentElement('beforebegin', box);
+    setHtml(box, html);
+  }
+  document.addEventListener('click', e => {
+    const a = e.target.closest?.('[data-rdl]');
+    if (!a) return;
+    e.preventDefault(); e.stopPropagation();
+    const [act, arg] = a.dataset.rdl.split(':');
+    if (act === 'view') { localView = arg === 'place' ? 'place' : 'area'; store.set('rd-local-view', localView); localExpanded = false; }
+    if (act === 'all') localExpanded = !localExpanded;
+    try { renderPanel(); decorateLocalOld(); } catch { /* ignore */ }
+  }, true);
+
+
+  // ---------------------------------------------------------------------------
   // 10. Key colour follows the leading party (most seats, then most votes); blue by default.
   // ---------------------------------------------------------------------------
   function updateKeyColour(st) {
@@ -1621,7 +1784,7 @@
     hideUpsells();
     // The site changes the page many times a second (animated numbers, map redraws). Run our
     // upkeep at most once per 120 ms: straight away if it has been quiet, otherwise once at the end.
-    const upkeep = () => { hideUpsells(); ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); };
+    const upkeep = () => { decorateLocalOld(); hideUpsells(); ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); };
     let upkeepAt = 0, upkeepTimer = null;
     const runUpkeep = () => { upkeepTimer = null; upkeepAt = Date.now(); try { upkeep(); } catch (err) { console.warn('[ResultsDesk Plus] upkeep', err); } };
     new MutationObserver(() => {

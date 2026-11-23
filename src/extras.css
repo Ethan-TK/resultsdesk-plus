@@ -413,6 +413,45 @@ body.dashboard-body[data-dashboard-view]:not([data-dashboard-view="map"]) #rdDoc
 .rd-design-btn[aria-checked="true"] .rd-switch i { transform: translateX(12px); }
 body.rd-tv .rd-design-btn { display: none !important; }
 
+
+/* ---------- local results (votes by area and voting place) ---------- */
+.rdl {
+  --l-text: var(--n-text, var(--rd-text, #f7f9fd)); --l-muted: var(--n-muted, var(--rd-muted, #aebbd0));
+  --l-faint: var(--n-faint, var(--rd-faint, #8998ad)); --l-line: var(--n-line, var(--rd-border, rgba(157, 178, 210, .22)));
+  --l-soft: var(--n-surface-2, var(--rd-panel-2, #15243b)); --l-chip: var(--n-surface-3, var(--rd-panel-3, #1b2e4d));
+  margin: 8px 0 0; padding: 14px 14px 10px; border-top: 1px solid var(--l-line); color: var(--l-text);
+  font: 500 12.5px/1.4 var(--n-font, inherit); text-align: left;
+}
+.rdl h4 { margin: 0; font: 700 14px/1.2 var(--n-font, inherit); letter-spacing: 0; text-transform: none; color: var(--l-text); }
+.rdl-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.rdl-seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--l-soft); border: 1px solid var(--l-line); }
+.rdl-seg button { height: 24px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--l-muted); font: 600 11.5px/1 var(--n-font, inherit); cursor: pointer; }
+.rdl-seg button.is-on { background: var(--l-chip); color: var(--l-text); }
+.rdl-summary { margin: 0 0 8px; color: var(--l-muted); font-size: 12px; }
+.rdl-summary b { color: var(--l-text); }
+.rdl-sec { display: grid; gap: 3px; margin: 0 0 10px; padding: 8px 10px; border-radius: 9px; background: var(--l-soft); font-size: 11.5px; color: var(--l-muted); }
+.rdl-sec > div { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.rdl-sec span { min-width: 92px; color: var(--l-faint); }
+.rdl-sec b { color: var(--l-text); font-variant-numeric: tabular-nums; }
+.rdl-sec i, .rdl-win i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.rdl-list { display: grid; gap: 2px; }
+.rdl-row { padding: 8px 4px 7px; border-radius: 8px; }
+.rdl-row:hover { background: var(--l-soft); }
+.rdl-main { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.rdl-name { min-width: 0; font-weight: 600; font-size: 13px; color: var(--l-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rdl-win { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--l-muted); }
+.rdl-win i { background: var(--c); }
+.rdl-win b { color: var(--l-text); font-variant-numeric: tabular-nums; }
+.rdl-bar { display: flex; height: 5px; margin: 6px 0 4px; border-radius: 3px; overflow: hidden; background: var(--l-chip); }
+.rdl-bar i { display: block; height: 100%; }
+.rdl-meta { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: var(--l-faint); font-variant-numeric: tabular-nums; }
+.rdl-more { display: block; width: 100%; height: 30px; margin: 4px 0 0; border: 0; border-radius: 8px; background: none; color: var(--l-muted); font: 600 12px/1 var(--n-font, inherit); cursor: pointer; }
+.rdl-more:hover { background: var(--l-soft); color: var(--l-text); }
+.rdl-src { margin: 8px 0 0; font-size: 10.5px; line-height: 1.4; color: var(--l-faint); }
+.rdl-empty { padding: 10px 0; color: var(--l-muted); }
+.rdl-old { padding: 0 6px; }
+body.light-mode .rdl-old .rdl { --l-text: #243247; --l-muted: #55657d; --l-faint: #718095; --l-line: #dce2e9; --l-soft: #f1f4f8; --l-chip: #e8eef5; }
+
 /* =====================================================================================
    NEW DESIGN (body.rd-clean, 901px and wider). Off = the old design, untouched.
    A neutral graphite theme, one typeface, and three components of our own:

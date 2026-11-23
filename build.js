@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = '2.5.0';
+const VERSION = '2.6.0';
 const RAW = 'https://raw.githubusercontent.com/Ethan-TK/resultsdesk-plus/main/resultsdesk-plus.user.js';
 const HOME = 'https://github.com/Ethan-TK/resultsdesk-plus';
 
@@ -11,6 +11,37 @@ const src = f => fs.readFileSync(path.join(__dirname, 'src', f), 'utf8');
 const core = src('core.js');
 const extras = src('extras.js');
 const css = src('extras.css');
+
+// ---- local results by voting place (data/2026/*.json, from tools/build_local_data.py) ----
+// The site's security policy only lets its page fetch from its own domains, so this data travels inside
+// the script itself: one compressed chunk per electorate, unpacked only when that electorate is opened.
+const zlib = require('zlib');
+const dataDir = path.join(__dirname, 'data', '2026');
+const localData = {};
+if (fs.existsSync(dataDir)) {
+  for (const f of fs.readdirSync(dataDir)) {
+    if (!f.endsWith('.json') || f === 'index.json') continue;
+    const d = JSON.parse(fs.readFileSync(path.join(dataDir, f), 'utf8'));
+    const R = d.places.map(([name, sec, pv, cv]) => {
+      let loc, venue;
+      if (/^Taken in /.test(name)) { loc = ''; venue = name.replace(/^Taken in /, ''); } // hospital / care-home / mobile teams
+      else {
+        const parts = name.split(', ');
+        loc = parts[0];
+        const v = [];
+        for (const part of parts.slice(1)) {            // venue name only: stop at the street address
+          if (/^\d/.test(part)) break;
+          if (v.length && (v.join(', ') + ', ' + part).length > 60) break;
+          v.push(part);
+        }
+        venue = v.join(', ');
+      }
+      return [loc, venue, sec, pv, cv];
+    });
+    const compact = { n: d.name, p: d.produced, k: d.kind, P: d.parties, C: d.cands.map(c => [c.p, c.s]), R };
+    localData[f.slice(0, -5)] = zlib.deflateSync(Buffer.from(JSON.stringify(compact)), { level: 9 }).toString('base64');
+  }
+}
 
 const out = `// ==UserScript==
 // @name         ResultsDesk Plus
@@ -59,6 +90,9 @@ function rdPlusMain() {
   }
   if (document.head) addStyles();
   else document.addEventListener('DOMContentLoaded', addStyles, { once: true });
+
+  // ---- local results data: ${Object.keys(localData).length} electorates, compressed (see build.js) ----
+  const RD_LOCAL_DATA = ${JSON.stringify(localData)};
 
   // ---- core: speed + map styling ----
 ${core}

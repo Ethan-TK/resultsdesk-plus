@@ -452,6 +452,16 @@ body.rd-tv .rd-design-btn { display: none !important; }
 .rdl-old { padding: 0 6px; }
 body.light-mode .rdl-old .rdl { --l-text: #243247; --l-muted: #55657d; --l-faint: #718095; --l-line: #dce2e9; --l-soft: #f1f4f8; --l-chip: #e8eef5; }
 
+
+/* ---------- local results: map switch ---------- */
+.rdl-maprow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 8px; }
+.rdl-map-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; color: var(--l-text); font: 600 12px/1.2 var(--n-font, inherit); cursor: pointer; text-align: left; }
+.rdl-map-toggle .rd-switch { background: var(--l-chip); }
+.rdl-map-toggle[aria-checked="true"] .rd-switch { background: var(--n-accent, #3b82f6); }
+.rdl-map-toggle[aria-checked="true"] .rd-switch i { transform: translateX(12px); }
+.rdl-maprow small { color: var(--l-faint); font-size: 11px; white-space: nowrap; }
+.leaflet-tooltip.rdl-tip { padding: 6px 9px; border-radius: 8px; font: 600 12px/1.35 var(--n-font, system-ui, sans-serif); box-shadow: 0 6px 18px rgba(0, 0, 0, .3); }
+
 /* =====================================================================================
    NEW DESIGN (body.rd-clean, 901px and wider). Off = the old design, untouched.
    A neutral graphite theme, one typeface, and three components of our own:

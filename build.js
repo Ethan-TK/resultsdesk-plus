@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = '2.6.0';
+const VERSION = '2.7.0';
 const RAW = 'https://raw.githubusercontent.com/Ethan-TK/resultsdesk-plus/main/resultsdesk-plus.user.js';
 const HOME = 'https://github.com/Ethan-TK/resultsdesk-plus';
 
@@ -22,7 +22,7 @@ if (fs.existsSync(dataDir)) {
   for (const f of fs.readdirSync(dataDir)) {
     if (!f.endsWith('.json') || f === 'index.json') continue;
     const d = JSON.parse(fs.readFileSync(path.join(dataDir, f), 'utf8'));
-    const R = d.places.map(([name, sec, pv, cv]) => {
+    const R = d.places.map(([name, sec, pv, cv], i) => {
       let loc, venue;
       if (/^Taken in /.test(name)) { loc = ''; venue = name.replace(/^Taken in /, ''); } // hospital / care-home / mobile teams
       else {
@@ -36,7 +36,8 @@ if (fs.existsSync(dataDir)) {
         }
         venue = v.join(', ');
       }
-      return [loc, venue, sec, pv, cv];
+      const xy = d.xy && d.xy[i];
+      return [loc, venue, sec, pv, cv, xy ? Math.round(xy[0] * 1e4) / 1e4 : null, xy ? Math.round(xy[1] * 1e4) / 1e4 : null];
     });
     const compact = { n: d.name, p: d.produced, k: d.kind, P: d.parties, C: d.cands.map(c => [c.p, c.s]), R };
     localData[f.slice(0, -5)] = zlib.deflateSync(Buffer.from(JSON.stringify(compact)), { level: 9 }).toString('base64');

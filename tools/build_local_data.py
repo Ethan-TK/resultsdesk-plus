@@ -75,13 +75,14 @@ def parse_pdf(path):
     name, produced, kind_label = None, None, None
     tables = {k: {'cols': None, 'places': [], 'total': None} for k in ('party', 'cand')}
     kind = None
+    sec_state = 0          # section in force at the top of the page (a heading can end one page and its rows start the next)
     for page in doc:
         ls = page_lines(page)
         horiz = [l for l in ls if not l['v']]
         vert = sorted((l for l in ls if l['v']), key=lambda l: l['x0'])
         for l in horiz:
-            if l['t'] == 'Party Vote Details': kind = 'party'
-            elif l['t'] == 'Candidate Vote Details': kind = 'cand'
+            if l['t'] == 'Party Vote Details': kind = 'party'; sec_state = 0
+            elif l['t'] == 'Candidate Vote Details': kind = 'cand'; sec_state = 0
             elif name is None and re.match(r'^\d{2} ', l['t']): name = clean(l['t'][3:])
             m = re.match(r'Produced: (\S+ \S+)', l['t'])
             if m: produced = m.group(1)
@@ -112,7 +113,7 @@ def parse_pdf(path):
             if best is not None:
                 best['name'].append(t); last = best
         for r in rows:
-            sec = None
+            sec = sec_state
             for hy, hs in heads:
                 if hy < r['y']: sec = hs
             vals = [int(x['t'].replace(',', '')) for x in sorted(r['n'], key=lambda x: x['x0'])]
@@ -121,8 +122,9 @@ def parse_pdf(path):
             if re.search(r'\bTOTAL$', nm):
                 tb['total'] = row
             else:
-                if row['s'] is None: row['s'] = tb['places'][-1]['s'] if tb['places'] else 0
                 tb['places'].append(row)
+        if heads:
+            sec_state = heads[-1][1]
     return no, name, produced, kind_label, tables
 
 

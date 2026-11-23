@@ -783,6 +783,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.7.0', ['Local results on the map: a “Show areas on the map” switch in the Local results section splits the electorate into areas coloured by who won each (the part of the electorate nearest each area’s voting places, so approximate), with details on hover. Locations come from LINZ’s NZ Addresses data.', 'Fixed advance voting compared with election day for Papakura and Southland.']],
     ['2.6.0', ['Local results: electorate panels now show how each area and voting place voted (by area or by place, candidate or party vote, advance voting compared with election day), from the Electoral Commission’s own published results by voting place.']],
     ['2.5.0', ['Hides the site’s new “Get PRO” button, its Pro promo cards and locked Area button, and the NZ / Switzerland switch. (Pro features stay Pro.)', 'Fixes for the site’s latest update: its new Settings button is no longer hidden, and the TV mode button is back.']],
     ['2.4.1', ['New design: removed the seats box from the top of the New Zealand panel.']],
@@ -1581,7 +1582,7 @@
     localData.set(slug, 'loading');
     unpackLocal(RD_LOCAL_DATA[slug])
       .then(d => localData.set(slug, d), () => localData.set(slug, 'none'))
-      .then(() => { try { renderPanel(); decorateLocalOld(); } catch { /* ignore */ } });
+      .then(() => { try { renderPanel(); decorateLocalOld(); syncLocalMap(); } catch { /* ignore */ } });
     return 'loading';
   }
 
@@ -1617,26 +1618,14 @@
     if (!d || d === 'none') return '';
     if (d === 'loading') return '<section class="rdl"><div class="rdl-head"><h4>Local results</h4></div><div class="rdl-empty">Loading…</div></section>';
     const mode = viewMode();
-    const cols = localColumns(d, mode, sel.live);
-    const n = cols.length;
-    const rows = d.R.map(([loc, venue, sec, pv, cv]) => {
-      const votes = mode === 'partyvote' ? pv : cv;
-      return { loc, venue, sec, votes, total: votes.reduce((a, b) => a + b, 0) };
-    });
-    const all = sumVotes(rows, n);
-    if (!(all.reduce((a, b) => a + b, 0) > 0)) return '';
-
-    // group voting places into areas (suburb or town); care-home and hospital teams go together
-    const groups = new Map();
-    for (const r of rows) {
-      const key = r.loc || MOBILE_TEAMS;
-      if (!groups.has(key)) groups.set(key, { name: key, rows: [] });
-      groups.get(key).rows.push(r);
-    }
-    const areas = [...groups.values()].map(g => {
-      const votes = sumVotes(g.rows, n);
-      return { name: g.name, places: g.rows.length, votes, ...leaderOf(votes) };
-    }).filter(a => a.total > 0).sort((a, b) => b.total - a.total);
+    const an = localAnalysis(d, mode, sel.live);
+    if (!an) return '';
+    const { cols, n, rows, areas } = an;
+    // how many areas can be drawn on the map (those with voting places inside this electorate)
+    let placed = null;
+    const geo = localGeoFor(slugOf(sel.name), sel.name, d);
+    if (geo) { const names = new Set(geo.seeds.map(s => s.name)); placed = areas.filter(a => names.has(a.name)).length; }
+    const mapRow = `<div class="rdl-maprow"><button type="button" class="rdl-map-toggle" role="switch" aria-checked="${localMapOn}" data-rdl="map"><span class="rd-switch" aria-hidden="true"><i></i></span><span>Show areas on the map</span></button>${placed != null ? `<small>${placed} of ${areas.length} areas</small>` : ''}</div>`;
 
     // plain-words summary: who won most areas
     const wins = new Map();
@@ -1684,12 +1673,164 @@
           <button type="button" data-rdl="view:area" class="${localView === 'area' ? 'is-on' : ''}" aria-pressed="${localView === 'area'}">By area</button>
           <button type="button" data-rdl="view:place" class="${localView === 'place' ? 'is-on' : ''}" aria-pressed="${localView === 'place'}">By place</button>
         </span></div>
+      ${mapRow}
       ${summary ? `<p class="rdl-summary">${summary}</p>` : ''}
       ${secHtml}
       <div class="rdl-list">${list}</div>
       ${more > 0 ? `<button type="button" class="rdl-more" data-rdl="all">${localExpanded ? 'Show fewer' : `Show all ${more + LIMIT} ${noun}`}</button>` : ''}
-      <p class="rdl-src">${mode === 'partyvote' ? 'Party vote' : 'Candidate vote'}. Source: Electoral Commission, ${esc(kind.toLowerCase())}${when ? `, produced ${when}` : ''}.${prelim ? ' Special votes are not included.' : ''} Places with fewer than 6 votes show as zero.</p>
+      <p class="rdl-src">${mode === 'partyvote' ? 'Party vote' : 'Candidate vote'}. Source: Electoral Commission, ${esc(kind.toLowerCase())}${when ? `, produced ${when}` : ''}.${prelim ? ' Special votes are not included.' : ''} Places with fewer than 6 votes show as zero.${localMapOn ? ' Map areas are approximate: the part of the electorate nearest each area’s voting places. Locations from LINZ NZ Addresses (CC BY 4.0).' : ''}</p>
     </section>`;
+  }
+
+  // Everything about one electorate's voting places for the chosen vote type (candidate or party).
+  function localAnalysis(d, mode, live) {
+    const cols = localColumns(d, mode, live);
+    const n = cols.length;
+    const rows = d.R.map(([loc, venue, sec, pv, cv, x, y]) => {
+      const votes = mode === 'partyvote' ? pv : cv;
+      return { loc, venue, sec, votes, total: votes.reduce((a, b) => a + b, 0), x, y };
+    });
+    if (!(sumVotes(rows, n).reduce((a, b) => a + b, 0) > 0)) return null;
+    // group voting places into areas (suburb or town); care-home and hospital teams go together
+    const groups = new Map();
+    for (const r of rows) {
+      const key = r.loc || MOBILE_TEAMS;
+      if (!groups.has(key)) groups.set(key, { name: key, rows: [] });
+      groups.get(key).rows.push(r);
+    }
+    const areas = [...groups.values()].map(g => {
+      const votes = sumVotes(g.rows, n);
+      return { name: g.name, places: g.rows.length, rows: g.rows, votes, ...leaderOf(votes) };
+    }).filter(a => a.total > 0).sort((a, b) => b.total - a.total);
+    return { cols, n, rows, areas };
+  }
+
+  // ----- local results on the map -----
+  // The electorate is split into areas (one per suburb or town) and each is coloured by who won it. An area's
+  // region is the part of the electorate nearer to its voting places than to any other area's (a Voronoi
+  // diagram of the places, clipped to the electorate's outline), so the regions are approximate.
+  let localMapOn = store.get('rd-local-map', false);
+  const localGeo = new Map();                 // slug -> { parts, seeds, lat0, cells }
+  let localLayer = null, localLayerKey = '';
+
+  const electorateGeom = name => {
+    let g = null;
+    try { geoJsonLayer.eachLayer(l => { if (!g && l.feature?.properties?.live?.electorate_name === name) g = l.feature.geometry; }); } catch { /* map not drawn yet */ }
+    return g;
+  };
+  function ringHas(ring, x, y) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+      if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+  // Thin out a coastline: keep a vertex only when it is further than tol from the last one kept.
+  function decimate(ring, tol) {
+    const out = [ring[0]];
+    for (let i = 1; i < ring.length - 1; i++) {
+      const a = out[out.length - 1], b = ring[i];
+      if (Math.abs(b[0] - a[0]) > tol || Math.abs(b[1] - a[1]) > tol) out.push(b);
+    }
+    out.push(ring[ring.length - 1]);
+    return out.length >= 4 ? out : ring;
+  }
+
+  function localGeoFor(slug, name, d) {
+    let g = localGeo.get(slug);
+    if (g) return g;
+    const geom = electorateGeom(name);
+    if (!geom) return null;
+    const polys = geom.type === 'MultiPolygon' ? geom.coordinates : [geom.coordinates];
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    const parts = polys.map(poly => {
+      let a = 1e9, b = 1e9, c = -1e9, e = -1e9;
+      for (const p of poly[0]) { if (p[0] < a) a = p[0]; if (p[0] > c) c = p[0]; if (p[1] < b) b = p[1]; if (p[1] > e) e = p[1]; }
+      x0 = Math.min(x0, a); y0 = Math.min(y0, b); x1 = Math.max(x1, c); y1 = Math.max(y1, e);
+      return { bb: [a, b, c, e], outer: poly[0], holes: poly.slice(1), simple: null };
+    });
+    const tol = Math.max(0.00015, Math.hypot(x1 - x0, y1 - y0) / 6000);   // coarser for huge electorates
+    for (const pt of parts) pt.simple = decimate(pt.outer, tol);
+    // one seed per area: the vote-weighted centre of its voting places that lie inside this electorate
+    const acc = new Map();
+    for (const [loc, , , , cv, x, y] of d.R) {
+      if (!loc || x == null) continue;
+      if (!parts.some(pt => x >= pt.bb[0] && x <= pt.bb[2] && y >= pt.bb[1] && y <= pt.bb[3] && ringHas(pt.simple, x, y))) continue;
+      const w = 1 + cv.reduce((s, v) => s + v, 0);
+      const a = acc.get(loc) || { name: loc, sx: 0, sy: 0, w: 0 };
+      a.sx += x * w; a.sy += y * w; a.w += w; acc.set(loc, a);
+    }
+    g = { parts, seeds: [...acc.values()].map(a => ({ name: a.name, x: a.sx / a.w, y: a.sy / a.w })), lat0: (y0 + y1) / 2, cells: null };
+    localGeo.set(slug, g);
+    return g;
+  }
+
+  function localCells(g) {
+    if (g.cells) return g.cells;
+    const k = Math.cos(g.lat0 * Math.PI / 180);                       // longitude degrees are shorter away from the equator
+    const S = g.seeds.map(s => [s.x * k, s.y]);
+    const subject = g.parts.map(pt => pt.simple.map(p => [p[0] * k, p[1]]));
+    const clip = (ring, nx, ny, c) => {                               // keep the side where nx*x + ny*y <= c
+      const out = [];
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i], b = ring[(i + 1) % ring.length];
+        const da = nx * a[0] + ny * a[1] - c, db = nx * b[0] + ny * b[1] - c;
+        if (da <= 0) out.push(a);
+        if ((da < 0 && db > 0) || (da > 0 && db < 0)) { const t = da / (da - db); out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]); }
+      }
+      return out;
+    };
+    const cells = new Map();
+    S.forEach((s, i) => {
+      const order = S.map((p, j) => [(p[0] - s[0]) ** 2 + (p[1] - s[1]) ** 2, j]).filter(t => t[1] !== i).sort((a, b) => a[0] - b[0]);
+      let rings = subject, reach = Infinity;                           // reach: squared distance to the cell's furthest corner
+      for (let m = 0; m < order.length && order[m][0] <= 4 * reach; m++) {
+        const o = S[order[m][1]];
+        const nx = o[0] - s[0], ny = o[1] - s[1], c = (o[0] * o[0] + o[1] * o[1] - s[0] * s[0] - s[1] * s[1]) / 2;
+        rings = rings.map(r => clip(r, nx, ny, c)).filter(r => r.length >= 3);
+        if (!rings.length) break;
+        if (m >= 2) { reach = 0; for (const r of rings) for (const p of r) { const d2 = (p[0] - s[0]) ** 2 + (p[1] - s[1]) ** 2; if (d2 > reach) reach = d2; } }
+      }
+      cells.set(g.seeds[i].name, rings.map(r => r.map(p => [p[1], p[0] / k])));   // [lat, lon] for Leaflet
+    });
+    g.cells = cells;
+    return cells;
+  }
+
+  function syncLocalMap() {
+    let want = null;
+    try {
+      if (localMapOn && ds() === 'EC_LIVE_2026' && !document.body.classList.contains('rd-tv') && typeof map !== 'undefined') {
+        const sel = selectedElectorate();
+        const d = sel && localData.get(slugOf(sel.name));
+        if (sel && d && typeof d === 'object') want = { sel, d };
+      }
+    } catch { /* not ready */ }
+    if (!want) { if (localLayer) { localLayer.remove(); localLayer = null; } localLayerKey = ''; return; }
+    const mode = viewMode(), slug = slugOf(want.sel.name), key = slug + '|' + mode;
+    if (key === localLayerKey && localLayer && map.hasLayer(localLayer)) return;
+    const an = localAnalysis(want.d, mode, want.sel.live);
+    const g = an && localGeoFor(slug, want.sel.name, want.d);
+    if (!g || !g.seeds.length) return;
+    const cells = localCells(g);
+    if (localLayer) localLayer.remove();
+    if (!map.getPane('rdLocal')) { map.createPane('rdLocal'); map.getPane('rdLocal').style.zIndex = 460; }
+    const layer = L.layerGroup();
+    for (const a of an.areas) {
+      const rings = cells.get(a.name);
+      if (!rings || !rings.length) continue;
+      const share = Math.max(0, Math.min(1, (a.share - 0.3) / 0.4));       // 30% of the vote = faint, 70% = strong
+      const poly = L.polygon(rings.map(r => [r]), {
+        pane: 'rdLocal', color: '#ffffff', weight: 0.8, opacity: 0.55, fillColor: an.cols[a.i].color, fillOpacity: 0.32 + 0.5 * share,
+        bubblingMouseEvents: false,
+      });
+      poly.bindTooltip(`<b>${esc(a.name)}</b><br>${esc(an.cols[a.i].label)} ${(a.share * 100).toFixed(0)}%<br>${fmt(a.total)} votes · ${a.places} voting place${a.places === 1 ? '' : 's'}`, { sticky: true, className: 'rdl-tip' });
+      poly.on('mouseover', () => poly.setStyle({ weight: 2.2, opacity: 1 })).on('mouseout', () => poly.setStyle({ weight: 0.8, opacity: 0.55 }));
+      layer.addLayer(poly);
+    }
+    layer.addTo(map);
+    localLayer = layer; localLayerKey = key;
   }
 
   // Old design: the site's own panel is showing, so add the section to it.
@@ -1712,7 +1853,8 @@
     const [act, arg] = a.dataset.rdl.split(':');
     if (act === 'view') { localView = arg === 'place' ? 'place' : 'area'; store.set('rd-local-view', localView); localExpanded = false; }
     if (act === 'all') localExpanded = !localExpanded;
-    try { renderPanel(); decorateLocalOld(); } catch { /* ignore */ }
+    if (act === 'map') { localMapOn = !localMapOn; store.set('rd-local-map', localMapOn); }
+    try { renderPanel(); decorateLocalOld(); syncLocalMap(); } catch { /* ignore */ }
   }, true);
 
 
@@ -1784,7 +1926,7 @@
     hideUpsells();
     // The site changes the page many times a second (animated numbers, map redraws). Run our
     // upkeep at most once per 120 ms: straight away if it has been quiet, otherwise once at the end.
-    const upkeep = () => { decorateLocalOld(); hideUpsells(); ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); };
+    const upkeep = () => { decorateLocalOld(); syncLocalMap(); hideUpsells(); ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); };
     let upkeepAt = 0, upkeepTimer = null;
     const runUpkeep = () => { upkeepTimer = null; upkeepAt = Date.now(); try { upkeep(); } catch (err) { console.warn('[ResultsDesk Plus] upkeep', err); } };
     new MutationObserver(() => {

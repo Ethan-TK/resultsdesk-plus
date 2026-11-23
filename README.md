@@ -18,7 +18,7 @@ Your userscript manager will pick up new versions automatically.
 - **Margin shading.** Close races are paler, safe seats solid. A legend on the map switches it on and off.
 
 - **Special votes.** The New Zealand panel shows how many special votes are still to count (the Electoral Commission's estimate), their share of all votes, turnout so far and with them included, and when the official count is due (Fri 27 Nov). Each electorate panel shows a rough estimate for that seat (national rate × votes counted there) and flags "could change" when the lead is small next to it. TV mode shows the national total.
-- **Local results.** Open an electorate and scroll to *Local results*: how each area (suburb or town) and each voting place voted, with a one-line summary of who won most areas, advance voting compared with election day, and a switch between *By area* and *By place*. It follows the Candidate / Party switch and works for all 71 electorates. The numbers are the Electoral Commission's own published votes by voting place (see below).
+- **Local results.** Open an electorate and scroll to *Local results*: how each area (suburb or town) and each voting place voted, with a one-line summary of who won most areas, advance voting compared with election day, and a switch between *By area* and *By place*. It follows the Candidate / Party switch and works for all 71 electorates. The numbers are the Electoral Commission's own published votes by voting place (see below). A **Show areas on the map** switch in that section splits the electorate into those areas on the map, each coloured by who won it (shade = how strongly) with details on hover. An area's region is the part of the electorate nearest its voting places, so the shapes are approximate, not official boundaries.
 - **Sitting MP.** The electorate panel shows who holds the seat ("Held by …") on 2026 live results. Based on 2023 winners plus the Port Waikato (2023) and Tāmaki Makaurau (2025) by-elections; the party shown is the one they were elected for. New 2026 electorates show "New electorate".
 - **All parties, sized to fit.** The New Zealand panel lists every party (no "Show more" button), reaches down to the bottom of the screen, and shrinks the rows so every party on 4% or more fits without scrolling. On very short screens the bloc builder under the totals is hidden to make room.
 - **Party colours.** Every party uses its own colour (Opportunity and ACT's magenta from their websites, the rest from Wikipedia's party colour data) on the map, party table and panels.
@@ -49,11 +49,14 @@ If only the styling changes on Firefox (no TV mode button, no Coalition button),
 
 `data/2026/*.json` holds votes by voting place for every electorate. It comes from the Electoral Commission's per-electorate results PDFs on [electionresults.govt.nz](https://electionresults.govt.nz/) (2026 General Election, **preliminary** results produced 8 Nov 2026, before special votes) and is turned into data by `tools/build_local_data.py`, which checks every party and candidate total against the live results before writing anything. Places with fewer than 6 votes are shown as zero by the Commission. `build.js` compresses the data into the script itself, because the site's security policy only lets its page load data from its own domains.
 
-To refresh it when official results are published: download the 71 PDFs in your browser into one folder, save the live `results-bundle.json` the site loads, then
+Voting-place locations for the map come from the street address in each place's name, matched to [LINZ NZ Addresses](https://data.linz.govt.nz/layer/123113) (CC BY 4.0; contains data sourced from LINZ) by `tools/add_coordinates.py`. About 97% of places with a street address are placed, and a match is only kept when the suburb or the electorate agrees. Hospital and care-home teams and places given only as a corner or intersection have no location.
+
+To refresh it when official results are published: download the 71 PDFs in your browser into one folder, save the live `results-bundle.json` the site loads, export the LINZ NZ Addresses layer as CSV (NZGD2000, free LINZ account), and save the site's two 2026 electorate boundary files (`general_electorates_2026.json`, `maori_electorates_2026.json`), then
 
 ```bash
 pip install pymupdf
 python tools/build_local_data.py <folder-with-pdfs> results-bundle.json data/2026
+python tools/add_coordinates.py nz-addresses.csv general_electorates_2026.json maori_electorates_2026.json data/2026
 node build.js
 ```
 

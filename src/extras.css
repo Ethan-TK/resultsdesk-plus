@@ -752,3 +752,8 @@ html body.rd-clean.rd-tv .rd-legend, html body.rd-clean.rd-tv .rd-pin-chip { bac
 .rd-tv-actions button[aria-pressed="true"] { background: var(--n-text, #fff) !important; color: var(--n-bg, #000) !important; }
 .rd-tv-top { flex-direction: column; }
 .rd-tv-actions { flex-wrap: wrap; }
+
+/* TV mode: buttons sit at the top of the sidebar and fade out with the pointer when the mouse is idle */
+.rd-tv-actions { justify-content: flex-end; opacity: 0; transition: opacity .25s; pointer-events: none; }
+body.rd-tv-awake .rd-tv-actions, .rd-tv-actions:hover { opacity: 1; pointer-events: auto; }
+body.rd-tv:not(.rd-tv-awake), body.rd-tv:not(.rd-tv-awake) * { cursor: none !important; }

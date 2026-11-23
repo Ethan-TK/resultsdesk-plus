@@ -493,7 +493,7 @@ body.light-mode .rd-areas-btn.active { color: #b45309 !important; }
     --n-text: #f3f4f6; --n-soft: #d3d6dc; --n-muted: #9299a6; --n-faint: #6c7381;
     --n-line: rgba(255, 255, 255, .08); --n-line-2: rgba(255, 255, 255, .15);
     --n-accent: #f5b83d; --n-shadow: 0 12px 36px rgba(0, 0, 0, .45);
-    --n-r: 14px; --n-r-sm: 9px;
+    --n-r: 14px; --n-r-sm: 9px; --n-map: #000;
 
     --font-ui: var(--n-font); --font-cond: var(--n-font); --rd-active-font: var(--n-font); --rd-display-font: var(--n-font);
     --rd-page: var(--n-bg); --rd-page-alt: var(--n-bg); --rd-header: var(--n-bg); --rd-map-bg: var(--n-bg); --rd-bg: var(--n-bg);
@@ -512,10 +512,11 @@ body.light-mode .rd-areas-btn.active { color: #b45309 !important; }
     --n-text: #15161a; --n-soft: #2c2f36; --n-muted: #666c77; --n-faint: #8a909b;
     --n-line: rgba(0, 0, 0, .08); --n-line-2: rgba(0, 0, 0, .16);
     --n-accent: #b7791f; --n-shadow: 0 12px 32px rgba(20, 22, 28, .12);
-    --rd-map-bg: #e9ecef;
+    --rd-map-bg: #e9ecef; --n-map: #e9ecef;   /* the site sets --rd-map-bg inline (black), so the map uses --n-map */
   }
   html body.rd-clean :where(button, input, select, textarea, h1, h2, h3, h4, table, th, td):not(.rd-brand-text, .rd-brand-text *) { font-family: var(--n-font) !important; }
-  html body.rd-clean :where(.card, .map-card, .map-card-body, #mapWrap, #map, .leaflet-container, .dashboard-shell, .dashboard-grid) { background-color: var(--rd-map-bg) !important; }
+  html body.rd-clean :where(.card, .map-card, .map-card-body, #mapWrap, #map, .leaflet-container, .dashboard-shell, .dashboard-grid) { background-color: var(--n-map) !important; }
+  html body.rd-clean.dashboard-body .map-wrap, html body.rd-clean.dashboard-body #map { background: var(--n-map) !important; }
 
   /* ---------- top bar: logo, tabs, scoreboard, tools ---------- */
   html body.rd-clean .app-header { background: var(--n-bg) !important; border: 0 !important; border-bottom: 1px solid var(--n-line) !important; box-shadow: none !important; }

@@ -783,6 +783,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.8.3', ['“Areas” are now called “suburbs”, and the Suburbs button on the map always starts switched off (it is no longer remembered between visits). Opening an electorate still shows its suburbs.', 'Smoother zooming and panning with every electorate’s suburbs showing, especially in Firefox: they are redrawn once per zoom step instead of several times, drawn in far fewer steps, and the fine lines are left out when zoomed right out.', 'With suburbs showing, the diagonal “flipped” stripes are drawn over them so they stay clearly visible, and electorate borders use the same line style as the suburb borders instead of fading.']],
     ['2.8.2', ['Much smoother map: moving the mouse over the areas no longer redraws the whole map, the areas are built a few at a time so pressing the Areas button doesn’t freeze the page, and the area layer is lighter to move and zoom.']],
     ['2.8.1', ['The Electorates and Trends tabs now fill the whole window (no empty band at the bottom or gutters at the sides, and no page scroll).']],
     ['2.8.0', ['Areas on the map are redrawn: each is clipped exactly to the electorate’s outline (no stray lines), built from the voting places it contains, and they follow the map when zooming.', 'Opening an electorate always shows its areas; the Areas button now shows every electorate’s areas at once.']],
@@ -1554,7 +1555,7 @@
         <button type="button" data-t="zoom:out" title="Zoom out" aria-label="Zoom out">${ICON.minus}</button>
         <button type="button" data-t="zoom:in" title="Zoom in" aria-label="Zoom in">${ICON.plus}</button>
         <button type="button" data-t="reset:1" title="Reset view" aria-label="Reset view"${moved ? '' : ' disabled'}>${ICON.reset}</button>
-        <button type="button" data-t="areas:1" class="${localMapOn ? 'is-on' : ''}" title="Show all areas on map" aria-label="Show all areas on map" aria-pressed="${localMapOn}">${ICON.areas}</button>
+        <button type="button" data-t="areas:1" class="${localMapOn ? 'is-on' : ''}" title="Show all suburbs on map" aria-label="Show all suburbs on map" aria-pressed="${localMapOn}">${ICON.areas}</button>
         <button type="button" data-t="coalition:1" class="${coalOpen ? 'is-on' : ''}" title="Coalition tracker" aria-label="Coalition tracker" aria-pressed="${coalOpen}">${ICON.people}</button>
       </div>`);
   }
@@ -1640,7 +1641,7 @@
     const ranked = [...wins.entries()].sort((a, b) => b[1] - a[1]);
     const pick = ranked.slice(0, 3).map(([i, c]) => `<b>${esc(cols[i].label)}</b> ${c}`).join(' · ');
     const summary = areas.length > 1
-      ? `Winner of each of the ${areas.length} areas: ${pick}${ranked.length > 3 ? ' …' : ''}`
+      ? `Winner of each of the ${areas.length} suburbs: ${pick}${ranked.length > 3 ? ' …' : ''}`
       : '';
 
     // advance voting compared with election day
@@ -1668,7 +1669,7 @@
           <div class="rdl-main"><span class="rdl-name">${esc(a.name)}<small>${fmt(a.total)}</small></span><span class="rdl-win"><i></i>${esc(cols[a.i].label)} <b>${(a.share * 100).toFixed(0)}%</b></span></div>
           ${localBarHtml(a.votes, cols, a.total)}
         </div>`).join('');
-      var more = areas.length - LIMIT, noun = 'areas';
+      var more = areas.length - LIMIT, noun = 'suburbs';
     }
     const kind = String(d.k || 'Preliminary results');
     const when = d.p ? `${+d.p.slice(8, 10)} ${SHORT_MONTH[+d.p.slice(5, 7) - 1] || ''}` : '';
@@ -1676,14 +1677,14 @@
     return `<section class="rdl">
       <div class="rdl-head"><h4>Local results</h4>
         <span class="rdl-seg" role="group" aria-label="Group by">
-          <button type="button" data-rdl="view:area" class="${localView === 'area' ? 'is-on' : ''}" aria-pressed="${localView === 'area'}">By area</button>
+          <button type="button" data-rdl="view:area" class="${localView === 'area' ? 'is-on' : ''}" aria-pressed="${localView === 'area'}">By suburb</button>
           <button type="button" data-rdl="view:place" class="${localView === 'place' ? 'is-on' : ''}" aria-pressed="${localView === 'place'}">By place</button>
         </span></div>
       ${summary ? `<p class="rdl-summary">${summary}</p>` : ''}
       ${secHtml}
       <div class="rdl-list">${list}</div>
       ${more > 0 ? `<button type="button" class="rdl-more" data-rdl="all">${localExpanded ? 'Show fewer' : `Show all ${more + LIMIT} ${noun}`}</button>` : ''}
-      <p class="rdl-src" title="Places with fewer than 6 votes show as zero. Map areas are the part of the electorate nearest each area’s voting places, so they are approximate.">Electoral Commission ${esc(kind.toLowerCase())}${when ? ` (${when})` : ''}${prelim ? ', before special votes' : ''}. Map locations: LINZ NZ Addresses (CC BY 4.0).</p>
+      <p class="rdl-src" title="Places with fewer than 6 votes show as zero. Map suburbs are the part of the electorate nearest each suburb’s voting places, so they are approximate.">Electoral Commission ${esc(kind.toLowerCase())}${when ? ` (${when})` : ''}${prelim ? ', before special votes' : ''}. Map locations: LINZ NZ Addresses (CC BY 4.0).</p>
     </section>`;
   }
 
@@ -1715,7 +1716,8 @@
   // places in the same area are joined, so an area's region is the sum of its places' cells. Everything is drawn on one
   // canvas clipped to the electorate's own outline, so nothing can spill outside it and the coastline is exact.
   // Open electorate: its areas always show. The Areas button shows every electorate's areas at once.
-  let localMapOn = store.get('rd-local-map', false);
+  let localMapOn = false;                       // the Suburbs button always starts off (an older version remembered it)
+  try { localStorage.removeItem('rd-local-map'); } catch { /* no storage */ }
   const localItems = new Map();                 // electorate name -> geometry + cells, built once its data is unpacked
   let localRenderer = null, localHi = null, localKey = '', localSyncTimer = 0;
   let localHover = null, localTip = null, localMoveTimer = 0, localMoveAt = null;
@@ -1815,6 +1817,7 @@
     for (const e of borders) { const l = byArea.get(e[4]); if (l) l.push(e); else byArea.set(e[4], [e]); }
     return {
       name, d, bb, parts, cells, borders, byArea, live: liveByName(name), _st: null,
+      isFlipped() { try { return getMapDataResultStatus(liveByName(this.name) || this.live) === 'flipped'; } catch { return false; } },
       style(mode) {
         if (this._st && this._st.mode === mode) return this._st.map;
         const an = localAnalysis(this.d, mode, liveByName(this.name) || this.live);
@@ -1824,25 +1827,56 @@
           map2.set(a.name, { color: an.cols[a.i].color, op: 0.32 + 0.5 * share,
             html: `<b>${esc(a.name)}</b><br>${esc(an.cols[a.i].label)} ${(a.share * 100).toFixed(0)}%<br>${fmt(a.total)} votes · ${a.places} voting place${a.places === 1 ? '' : 's'}` });
         }
+        const groups = new Map();
+        for (const cell of this.cells) {
+          const st = map2.get(cell.area);
+          if (!st) continue;
+          const op = Math.round(st.op * 12) / 12, key = st.color + '|' + op;
+          let g = groups.get(key);
+          if (!g) { g = { color: st.color, op, cells: [] }; groups.set(key, g); }
+          g.cells.push(cell);
+        }
+        map2.groups = [...groups.values()];
         this._st = { mode, map: map2 };
         return map2;
       },
     };
   }
 
-  const outlinePath = (ctx, it, sc, o) => {                      // the electorate's outline, thinned to what a screen can show
-    ctx.beginPath();
+  // Leaflet requests a redraw more than once per zoom or pan; do it once, before the browser paints.
+  function redrawOnce() {
+    if (this._rdQueued) return;
+    this._rdQueued = true;
+    queueMicrotask(() => { this._rdQueued = false; if (this._map) L.Canvas.prototype._redraw.call(this); });
+  }
+  const outlinePath = (it, sc, o) => {                           // the electorate's outline, thinned to what a screen can show
+    const path = new Path2D();
     for (const part of it.parts) for (const ring of part.rings) {
       let lx = 0, ly = 0;
       for (let i = 0; i < ring.length; i += 2) {
         const x = ring[i] * sc - o.x, y = ring[i + 1] * sc - o.y;
-        if (i === 0) ctx.moveTo(x, y);
-        else if (Math.abs(x - lx) >= 0.5 || Math.abs(y - ly) >= 0.5) ctx.lineTo(x, y); else continue;
+        if (i === 0) path.moveTo(x, y);
+        else if (Math.abs(x - lx) >= 0.5 || Math.abs(y - ly) >= 0.5) path.lineTo(x, y); else continue;
         lx = x; ly = y;
       }
-      ctx.closePath();
+      path.closePath();
     }
+    return path;
   };
+  // Diagonal stripes for electorates that changed hands, the same look as the site's own, drawn over the areas.
+  let hatchPat = null;
+  function hatchFor(ctx) {
+    if (hatchPat) return hatchPat;
+    const n = 12, c = document.createElement('canvas');
+    c.width = c.height = n;
+    const x = c.getContext('2d');
+    x.strokeStyle = 'rgba(10,14,24,0.72)'; x.lineWidth = 3.4; x.lineCap = 'square';
+    x.beginPath();
+    for (const k of [-n, 0, n]) { x.moveTo(k, n); x.lineTo(k + n, 0); }
+    x.stroke();
+    hatchPat = ctx.createPattern(c, 'repeat');
+    return hatchPat;
+  }
 
   // Drawing: runs inside Leaflet's own canvas machinery, so it is cleared, repositioned and scaled with the map.
   // Only what is on screen is drawn, and it only redraws when the map stops moving or the data changes.
@@ -1851,32 +1885,39 @@
     if (!items.length) return;
     const map2 = this._map, ctx = this._ctx, b = this._bounds;
     const sc = map2.getZoomScale(map2.getZoom(), 0), o = map2.getPixelOrigin();
-    const vx0 = b.min.x, vy0 = b.min.y, vx1 = b.max.x, vy1 = b.max.y;
+    const vx0 = b.min.x, vy0 = b.min.y, vx1 = b.max.x, vy1 = b.max.y, zoom = map2.getZoom();
     for (const it of items) {
       if (it.bb[2] * sc - o.x < vx0 || it.bb[0] * sc - o.x > vx1 || it.bb[3] * sc - o.y < vy0 || it.bb[1] * sc - o.y > vy1) continue;
       const style = it.style(this.mode);
+      const outline = outlinePath(it, sc, o);
       ctx.save();
-      outlinePath(ctx, it, sc, o);
-      ctx.clip('evenodd');
-      for (const cell of it.cells) {
-        const st = style.get(cell.area);
-        if (!st) continue;
-        const cb = cell.bb;
-        if (cb[2] * sc - o.x < vx0 || cb[0] * sc - o.x > vx1 || cb[3] * sc - o.y < vy0 || cb[1] * sc - o.y > vy1) continue;
+      ctx.clip(outline, 'evenodd');
+      for (const g of style.groups) {                                                 // one fill per colour, not one per cell
         ctx.beginPath();
-        cell.pts.forEach((v, k) => { const x = v[0] * sc - o.x, y = v[1] * sc - o.y; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
-        ctx.closePath();
-        ctx.globalAlpha = st.op; ctx.fillStyle = st.color; ctx.fill();
+        let any = false;
+        for (const cell of g.cells) {
+          const cb = cell.bb;
+          if (cb[2] * sc - o.x < vx0 || cb[0] * sc - o.x > vx1 || cb[3] * sc - o.y < vy0 || cb[1] * sc - o.y > vy1) continue;
+          any = true;
+          const pts = cell.pts;
+          for (let k = 0; k < pts.length; k++) { const x = pts[k][0] * sc - o.x, y = pts[k][1] * sc - o.y; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+          ctx.closePath();
+        }
+        if (any) { ctx.globalAlpha = g.op; ctx.fillStyle = g.color; ctx.fill(); }
       }
       ctx.globalAlpha = 1;
-      ctx.beginPath();
-      for (const e of it.borders) {
-        const ax = e[0] * sc - o.x, ay = e[1] * sc - o.y, bx = e[2] * sc - o.x, by = e[3] * sc - o.y;
-        if ((ax < vx0 && bx < vx0) || (ax > vx1 && bx > vx1) || (ay < vy0 && by < vy0) || (ay > vy1 && by > vy1)) continue;
-        ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+      if (zoom >= 7.5) {                                                              // far out the fine lines are just noise
+        ctx.beginPath();
+        for (const e of it.borders) {
+          const ax = e[0] * sc - o.x, ay = e[1] * sc - o.y, bx = e[2] * sc - o.x, by = e[3] * sc - o.y;
+          if ((ax < vx0 && bx < vx0) || (ax > vx1 && bx > vx1) || (ay < vy0 && by < vy0) || (ay > vy1 && by > vy1)) continue;
+          ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+        }
+        ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.9; ctx.stroke();
       }
-      ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.9; ctx.stroke();
+      if (it.isFlipped()) { ctx.fillStyle = hatchFor(ctx); ctx.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0); }   // inside the clip
       ctx.restore();
+      ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.9; ctx.stroke(outline);                    // electorate border, same as the suburb borders
     }
   }
   // The area under the mouse is outlined on its own small canvas, so moving the mouse never redraws the whole map of areas.
@@ -1888,8 +1929,7 @@
     const map2 = this._map, ctx = this._ctx;
     const sc = map2.getZoomScale(map2.getZoom(), 0), o = map2.getPixelOrigin();
     ctx.save();
-    outlinePath(ctx, h.it, sc, o);
-    ctx.clip('evenodd');
+    ctx.clip(outlinePath(h.it, sc, o), 'evenodd');
     ctx.beginPath();
     for (const e of edges) { ctx.moveTo(e[0] * sc - o.x, e[1] * sc - o.y); ctx.lineTo(e[2] * sc - o.x, e[3] * sc - o.y); }
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.4; ctx.stroke();
@@ -1901,7 +1941,7 @@
     if (!localHi) {
       if (!map.getPane('rdLocalHi')) { map.createPane('rdLocalHi'); map.getPane('rdLocalHi').style.zIndex = 461; }
       map.getPane('rdLocalHi').style.pointerEvents = 'none';
-      const Hi = L.Canvas.extend({ _draw: drawLocalHi });
+      const Hi = L.Canvas.extend({ _draw: drawLocalHi, _redraw: redrawOnce });
       localHi = new Hi({ pane: 'rdLocalHi', padding: 0.12 });
       map.addLayer(localHi);
     }
@@ -1976,7 +2016,7 @@
     if (!localRenderer) {
       if (!map.getPane('rdLocal')) { map.createPane('rdLocal'); map.getPane('rdLocal').style.zIndex = 460; }
       map.getPane('rdLocal').style.pointerEvents = 'none';
-      const Regions = L.Canvas.extend({ _draw: drawLocal });
+      const Regions = L.Canvas.extend({ _draw: drawLocal, _redraw: redrawOnce });
       localRenderer = new Regions({ pane: 'rdLocal', padding: 0.12 });                     // a small margin: a bigger canvas just costs more to move
       map.addLayer(localRenderer);
       map.on('mousemove', onLocalMove).on('mouseout', hideLocalTip);
@@ -1989,7 +2029,6 @@
 
   function toggleLocalMap() {
     localMapOn = !localMapOn;
-    store.set('rd-local-map', localMapOn);
     try { renderTools(); ensureAreasBtn(); syncLocalMap(); } catch { /* ignore */ }
   }
   // Old design: a button in the site's side controls, next to Coalition.
@@ -2001,8 +2040,8 @@
       b = el('button', 'map-icon-button rd-areas-btn');
       b.type = 'button';
       b.dataset.mapIcon = 'rdAreas';
-      b.title = 'Show all areas on map';
-      b.innerHTML = ICON.areas.replace('<svg ', '<svg width="20" height="20" ') + '<span>Areas</span>';
+      b.title = 'Show all suburbs on map';
+      b.innerHTML = ICON.areas.replace('<svg ', '<svg width="20" height="20" ') + '<span>Suburbs</span>';
       b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); toggleLocalMap(); });
       dock.insertBefore(b, dock.querySelector('.rd-coal-btn'));
     }

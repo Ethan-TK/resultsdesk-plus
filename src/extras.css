@@ -757,3 +757,8 @@ html body.rd-clean.rd-tv .rd-legend, html body.rd-clean.rd-tv .rd-pin-chip { bac
 .rd-tv-actions { justify-content: flex-end; opacity: 0; transition: opacity .25s; pointer-events: none; }
 body.rd-tv-awake .rd-tv-actions, .rd-tv-actions:hover { opacity: 1; pointer-events: auto; }
 body.rd-tv:not(.rd-tv-awake), body.rd-tv:not(.rd-tv-awake) * { cursor: none !important; }
+
+/* the buttons give their space back when hidden, so the info below slides up */
+.rd-tv-actions { max-height: 0; margin-bottom: -1.6vh; overflow: hidden; transition: opacity .25s, max-height .35s ease, margin-bottom .35s ease; }
+body.rd-tv-awake .rd-tv-actions, .rd-tv-actions:hover { max-height: 4em; margin-bottom: 0; }
+.rd-tv-panel > * { transition: transform .35s ease; }

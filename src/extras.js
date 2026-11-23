@@ -783,6 +783,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.8.2', ['Much smoother map: moving the mouse over the areas no longer redraws the whole map, the areas are built a few at a time so pressing the Areas button doesn’t freeze the page, and the area layer is lighter to move and zoom.']],
     ['2.8.1', ['The Electorates and Trends tabs now fill the whole window (no empty band at the bottom or gutters at the sides, and no page scroll).']],
     ['2.8.0', ['Areas on the map are redrawn: each is clipped exactly to the electorate’s outline (no stray lines), built from the voting places it contains, and they follow the map when zooming.', 'Opening an electorate always shows its areas; the Areas button now shows every electorate’s areas at once.']],
     ['2.7.1', ['Fixed: after areas were shown on the map, clicking off a region could leave the whole map unclickable.', 'The “Show areas on the map” switch moved to the map toolbar (top right in the new design, side controls in the old), and the Local results panel is shorter: five rows to start, votes beside each name, and a one-line source.']],
@@ -1593,7 +1594,7 @@
     localData.set(slug, 'loading');
     unpackLocal(RD_LOCAL_DATA[slug])
       .then(d => localData.set(slug, d), () => localData.set(slug, 'none'))
-      .then(() => { try { renderPanel(); decorateLocalOld(); syncLocalMapSoon(); } catch { /* ignore */ } });
+      .then(() => { try { const sel = selectedElectorate(); if (sel && slugOf(sel.name) === slug) { renderPanel(); decorateLocalOld(); } syncLocalMapSoon(); } catch { /* ignore */ } });
     return 'loading';
   }
 
@@ -1716,7 +1717,7 @@
   // Open electorate: its areas always show. The Areas button shows every electorate's areas at once.
   let localMapOn = store.get('rd-local-map', false);
   const localItems = new Map();                 // electorate name -> geometry + cells, built once its data is unpacked
-  let localRenderer = null, localKey = '', localSyncTimer = 0;
+  let localRenderer = null, localHi = null, localKey = '', localSyncTimer = 0;
   let localHover = null, localTip = null, localMoveTimer = 0, localMoveAt = null;
 
   const electorateGeom = name => {
@@ -1795,7 +1796,11 @@
     }
     const bb = [x0, y0, x1, y1];
     const polys2 = seeds.length ? voronoiCells(seeds, bb) : [];
-    const cells = polys2.map((pts, i) => ({ pts, area: seeds[i].area, sx: seeds[i].x, sy: seeds[i].y }));
+    const cells = polys2.map((pts, i) => {
+      let a = 1e18, b = 1e18, c = -1e18, e = -1e18;
+      for (const v of pts) { if (v[0] < a) a = v[0]; if (v[0] > c) c = v[0]; if (v[1] < b) b = v[1]; if (v[1] > e) e = v[1]; }
+      return { pts, bb: [a, b, c, e], area: seeds[i].area, sx: seeds[i].x, sy: seeds[i].y };
+    });
     // lines are only drawn where two different areas meet
     const borders = [];
     polys2.forEach((pts, i) => {
@@ -1806,8 +1811,10 @@
         borders.push([pts[k][0], pts[k][1], b[0], b[1], seeds[i].area]);
       }
     });
+    const byArea = new Map();
+    for (const e of borders) { const l = byArea.get(e[4]); if (l) l.push(e); else byArea.set(e[4], [e]); }
     return {
-      name, d, bb, parts, cells, borders, live: liveByName(name), _st: null,
+      name, d, bb, parts, cells, borders, byArea, live: liveByName(name), _st: null,
       style(mode) {
         if (this._st && this._st.mode === mode) return this._st.map;
         const an = localAnalysis(this.d, mode, liveByName(this.name) || this.live);
@@ -1823,31 +1830,39 @@
     };
   }
 
+  const outlinePath = (ctx, it, sc, o) => {                      // the electorate's outline, thinned to what a screen can show
+    ctx.beginPath();
+    for (const part of it.parts) for (const ring of part.rings) {
+      let lx = 0, ly = 0;
+      for (let i = 0; i < ring.length; i += 2) {
+        const x = ring[i] * sc - o.x, y = ring[i + 1] * sc - o.y;
+        if (i === 0) ctx.moveTo(x, y);
+        else if (Math.abs(x - lx) >= 0.5 || Math.abs(y - ly) >= 0.5) ctx.lineTo(x, y); else continue;
+        lx = x; ly = y;
+      }
+      ctx.closePath();
+    }
+  };
+
   // Drawing: runs inside Leaflet's own canvas machinery, so it is cleared, repositioned and scaled with the map.
+  // Only what is on screen is drawn, and it only redraws when the map stops moving or the data changes.
   function drawLocal() {
     const items = this.items || [];
     if (!items.length) return;
     const map2 = this._map, ctx = this._ctx, b = this._bounds;
     const sc = map2.getZoomScale(map2.getZoom(), 0), o = map2.getPixelOrigin();
+    const vx0 = b.min.x, vy0 = b.min.y, vx1 = b.max.x, vy1 = b.max.y;
     for (const it of items) {
-      if (it.bb[2] * sc - o.x < b.min.x || it.bb[0] * sc - o.x > b.max.x || it.bb[3] * sc - o.y < b.min.y || it.bb[1] * sc - o.y > b.max.y) continue;
+      if (it.bb[2] * sc - o.x < vx0 || it.bb[0] * sc - o.x > vx1 || it.bb[3] * sc - o.y < vy0 || it.bb[1] * sc - o.y > vy1) continue;
       const style = it.style(this.mode);
       ctx.save();
-      ctx.beginPath();
-      for (const part of it.parts) for (const ring of part.rings) {                    // the electorate's outline is the clip
-        let lx = 0, ly = 0;
-        for (let i = 0; i < ring.length; i += 2) {
-          const x = ring[i] * sc - o.x, y = ring[i + 1] * sc - o.y;
-          if (i === 0) ctx.moveTo(x, y);
-          else if (Math.abs(x - lx) >= 0.4 || Math.abs(y - ly) >= 0.4) ctx.lineTo(x, y); else continue;
-          lx = x; ly = y;
-        }
-        ctx.closePath();
-      }
+      outlinePath(ctx, it, sc, o);
       ctx.clip('evenodd');
       for (const cell of it.cells) {
         const st = style.get(cell.area);
         if (!st) continue;
+        const cb = cell.bb;
+        if (cb[2] * sc - o.x < vx0 || cb[0] * sc - o.x > vx1 || cb[3] * sc - o.y < vy0 || cb[1] * sc - o.y > vy1) continue;
         ctx.beginPath();
         cell.pts.forEach((v, k) => { const x = v[0] * sc - o.x, y = v[1] * sc - o.y; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
         ctx.closePath();
@@ -1855,21 +1870,47 @@
       }
       ctx.globalAlpha = 1;
       ctx.beginPath();
-      for (const e of it.borders) { ctx.moveTo(e[0] * sc - o.x, e[1] * sc - o.y); ctx.lineTo(e[2] * sc - o.x, e[3] * sc - o.y); }
-      ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.9; ctx.stroke();
-      if (this.hover && this.hover.it === it) {                                        // the area under the mouse
-        ctx.beginPath();
-        for (const e of it.borders) if (e[4] === this.hover.area) { ctx.moveTo(e[0] * sc - o.x, e[1] * sc - o.y); ctx.lineTo(e[2] * sc - o.x, e[3] * sc - o.y); }
-        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.4; ctx.stroke();
+      for (const e of it.borders) {
+        const ax = e[0] * sc - o.x, ay = e[1] * sc - o.y, bx = e[2] * sc - o.x, by = e[3] * sc - o.y;
+        if ((ax < vx0 && bx < vx0) || (ax > vx1 && bx > vx1) || (ay < vy0 && by < vy0) || (ay > vy1 && by > vy1)) continue;
+        ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
       }
+      ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.9; ctx.stroke();
       ctx.restore();
     }
   }
+  // The area under the mouse is outlined on its own small canvas, so moving the mouse never redraws the whole map of areas.
+  function drawLocalHi() {
+    const h = this.hover;
+    if (!h) return;
+    const edges = h.it.byArea.get(h.area);
+    if (!edges) return;
+    const map2 = this._map, ctx = this._ctx;
+    const sc = map2.getZoomScale(map2.getZoom(), 0), o = map2.getPixelOrigin();
+    ctx.save();
+    outlinePath(ctx, h.it, sc, o);
+    ctx.clip('evenodd');
+    ctx.beginPath();
+    for (const e of edges) { ctx.moveTo(e[0] * sc - o.x, e[1] * sc - o.y); ctx.lineTo(e[2] * sc - o.x, e[3] * sc - o.y); }
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.4; ctx.stroke();
+    ctx.restore();
+  }
 
+  function setLocalHover(found) {
+    if (!localRenderer) return;
+    if (!localHi) {
+      if (!map.getPane('rdLocalHi')) { map.createPane('rdLocalHi'); map.getPane('rdLocalHi').style.zIndex = 461; }
+      map.getPane('rdLocalHi').style.pointerEvents = 'none';
+      const Hi = L.Canvas.extend({ _draw: drawLocalHi });
+      localHi = new Hi({ pane: 'rdLocalHi', padding: 0.12 });
+      map.addLayer(localHi);
+    }
+    localHi.hover = found;
+    localHi._redraw();
+  }
   function hideLocalTip() {
     if (localTip) { try { map.removeLayer(localTip); } catch { /* not open */ } }
-    if (localHover && localRenderer) { localHover = null; localRenderer.hover = null; localRenderer._redraw(); }
-    localHover = null;
+    if (localHover) { localHover = null; setLocalHover(null); }
   }
   // The areas ignore the mouse (so they can never block a click); hover is worked out from the map's own mouse position.
   function onLocalMove(e) {
@@ -1886,24 +1927,25 @@
         let best = Infinity, area = null;
         for (const c of it.cells) { const d2 = (c.sx - p.x) ** 2 + (c.sy - p.y) ** 2; if (d2 < best) { best = d2; area = c.area; } }
         const info = area && it.style(rd.mode).get(area);
-        if (info) { found = { it, area, html: (rd.items.length > 1 ? `<small>${esc(it.name)}</small><br>` : '') + info.html }; }
+        if (info) found = { it, area, html: (rd.items.length > 1 ? `<small>${esc(it.name)}</small><br>` : '') + info.html };
         break;
       }
       if (!found) { hideLocalTip(); return; }
-      if (!localHover || localHover.it !== found.it || localHover.area !== found.area) { localHover = found; rd.hover = found; rd._redraw(); }
+      if (!localHover || localHover.it !== found.it || localHover.area !== found.area) { localHover = found; setLocalHover(found); }
       if (!localTip) localTip = L.tooltip({ className: 'rdl-tip', direction: 'top', offset: [0, -4], opacity: 1 });
       localTip.setContent(found.html).setLatLng(ll);
       if (!map.hasLayer(localTip)) localTip.addTo(map);
-    }, 30);
+    }, 40);
   }
 
   function dropLocalLayer() {
     hideLocalTip();
     if (localRenderer) { try { map.removeLayer(localRenderer); } catch { /* gone */ } localRenderer = null; }
+    if (localHi) { try { map.removeLayer(localHi); } catch { /* gone */ } localHi = null; }
     localKey = '';
     try { map.off('mousemove', onLocalMove).off('mouseout', hideLocalTip); } catch { /* no map */ }
   }
-  const syncLocalMapSoon = () => { clearTimeout(localSyncTimer); localSyncTimer = setTimeout(() => { try { syncLocalMap(); } catch { /* ignore */ } }, 60); };
+  const syncLocalMapSoon = (ms = 60) => { clearTimeout(localSyncTimer); localSyncTimer = setTimeout(() => { try { syncLocalMap(); } catch { /* ignore */ } }, ms); };
 
   function syncLocalMap() {
     let names = [];
@@ -1914,13 +1956,20 @@
       }
     } catch { /* not ready */ }
     const items = [];
+    let more = false, built = 0;
+    const t0 = performance.now();
     for (const nm of names) {
       const d = localFor(nm);                                                              // unpacks on first use, then calls back
       if (!d || d === 'none' || d === 'loading') continue;
       let it = localItems.get(nm);
-      if (!it) { it = buildLocalItem(nm, d); if (it) localItems.set(nm, it); }
+      if (!it) {
+        if (built > 0 && performance.now() - t0 > 10) { more = true; continue; }          // a few at a time, so the page stays responsive
+        it = buildLocalItem(nm, d); built++;
+        if (it) localItems.set(nm, it);
+      }
       if (it) items.push(it);
     }
+    if (more) syncLocalMapSoon(16);
     if (!items.length) { dropLocalLayer(); return; }
     const mode = viewMode(), key = items.map(i => i.name).join('|') + '#' + mode;
     if (key === localKey && localRenderer && map.hasLayer(localRenderer)) return;
@@ -1928,11 +1977,12 @@
       if (!map.getPane('rdLocal')) { map.createPane('rdLocal'); map.getPane('rdLocal').style.zIndex = 460; }
       map.getPane('rdLocal').style.pointerEvents = 'none';
       const Regions = L.Canvas.extend({ _draw: drawLocal });
-      localRenderer = new Regions({ pane: 'rdLocal', padding: 0.3 });
+      localRenderer = new Regions({ pane: 'rdLocal', padding: 0.12 });                     // a small margin: a bigger canvas just costs more to move
       map.addLayer(localRenderer);
       map.on('mousemove', onLocalMove).on('mouseout', hideLocalTip);
     }
-    localRenderer.items = items; localRenderer.mode = mode; localRenderer.hover = null; localHover = null;
+    localRenderer.items = items; localRenderer.mode = mode;
+    hideLocalTip();
     localKey = key;
     localRenderer._redraw();
   }

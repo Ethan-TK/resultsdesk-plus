@@ -360,14 +360,16 @@
   let tvTimer = null, tvIdx = 0, tvCycle = true;
 
   function tvButton() {
-    const nav = $('#themeToggleBtn')?.parentElement;
+    // Next to the light/dark button where the site still has one, otherwise first in the header tools.
+    const theme = $('header #themeToggleBtn');
+    const nav = theme?.parentElement || $('header .app-header-nav');
     if (!nav || $('#rdTvBtn')) return;
     const b = el('button', 'nav-btn rd-tv-btn', '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="13" rx="2"/><path d="M8 21h8"/></svg><span>TV mode</span>');
     b.id = 'rdTvBtn';
     b.type = 'button';
     b.title = 'Big-screen TV mode (T)';
     b.addEventListener('click', () => setTv(true));
-    nav.insertBefore(b, $('#themeToggleBtn'));
+    nav.insertBefore(b, theme || nav.querySelector('#rdChangelogBtn, .nav-btn:not(#rdDesignBtn)'));
   }
 
   // In TV mode the site's map-fit padding (which leaves room for its left panel) is replaced
@@ -781,6 +783,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.5.0', ['Hides the site’s new “Get PRO” button, its Pro promo cards and locked Area button, and the NZ / Switzerland switch. (Pro features stay Pro.)', 'Fixes for the site’s latest update: its new Settings button is no longer hidden, and the TV mode button is back.']],
     ['2.4.1', ['New design: removed the seats box from the top of the New Zealand panel.']],
     ['2.4.0', ['Faster and lighter: the full results file is no longer re-downloaded every 5 seconds (a tiny check still spots new results within a second), the script starts sooner, and it does far less work while the page updates.', 'New design: the arrow that hides and shows the top bar is visible again.']],
     ['2.3.0', ['Results are explained in plain words: the panel opens with who can govern and a seats bar, electorates open with who is winning and by how much, and changes are labelled (pts, seats, votes ahead).', 'Top bar is simpler: the seat scoreboard moved into the results panel.']],
@@ -844,10 +847,46 @@
     try { openChangelog.returnTo?.focus?.(); } catch { /* ignore */ }
   }
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#rdChangelog') && !$('#rdChangelog').hidden) { e.stopPropagation(); closeChangelog(); } }, true);
+  // ---------------------------------------------------------------------------
+  // 19. Hide the site's "Get PRO" upsells and the NZ / Switzerland switch.
+  // Only hides them; nothing Pro is unlocked. The site's promo opens a modal dialog, so its
+  // open() is made a no-op rather than just hidden (a hidden modal would still block the page).
+  // ---------------------------------------------------------------------------
+  const hideHard = n => { if (n && n.style.display !== 'none') n.style.setProperty('display', 'none', 'important'); };
+  let promoPatched = false, previewObserved = false;
+  function hideUpsells() {
+    document.querySelectorAll('.pro-header-cta, [data-pro-promo-trigger="header"], .rd-nz-country-switch, [data-map-icon="area"]').forEach(hideHard);
+    const promo = window.ResultsDeskProPromo;
+    if (promo && !promoPatched) {
+      promoPatched = true;
+      try {
+        promo.open = () => {};
+        promo.syncElectorateCard = () => clearPreview();
+      } catch { /* object frozen: CSS still hides the card */ }
+    }
+    const dlg = $('#proPromoDialog');
+    if (dlg?.open) { try { dlg.close(); } catch { /* ignore */ } }
+    clearPreview();
+    const view = $('#mapDataView');
+    if (view && !previewObserved) {
+      previewObserved = true;
+      new MutationObserver(clearPreview).observe(view, { attributes: true, attributeFilter: ['class'] });
+    }
+  }
+  function clearPreview() {
+    const card = $('#freeProAreaPreview');
+    if (card && !card.hidden) card.hidden = true;
+    const view = $('#mapDataView');
+    if (view?.classList.contains('has-pro-preview')) view.classList.remove('has-pro-preview');
+  }
+
   function changelogButton() {
     const help = $('header .nav-btn[data-nav="help"]');
     if (!help) return;
-    if (help.style.display !== 'none') help.style.setProperty('display', 'none', 'important'); // site CSS outranks a stylesheet rule
+    // The site's Help button became a Settings button (same data-nav="help"): keep that one.
+    const isSettings = help.classList.contains('legal-settings-trigger') || /settings/i.test(help.getAttribute('aria-label') || '');
+    if (isSettings) { if (help.style.display === 'none') help.style.removeProperty('display'); }
+    else if (help.style.display !== 'none') help.style.setProperty('display', 'none', 'important'); // site CSS outranks a stylesheet rule
     if ($('#rdChangelogBtn')) return;
     const b = el('button', 'nav-btn rd-cl-btn', '<svg class="utility-nav-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l2.5 2.5"/><path d="M3.05 11a9 9 0 1 1 .5 4"/><path d="M3 4v5h5"/></svg><span>Changelog</span>');
     b.id = 'rdChangelogBtn';
@@ -1579,9 +1618,10 @@
     try { if (Array.isArray(lastSeatSummaryRows) && lastSeatSummaryRows.length) renderSeatSummary(lastSeatSummaryRows); } catch { /* ignore */ }
     ensureResetViewBtn();
     designToggle();
+    hideUpsells();
     // The site changes the page many times a second (animated numbers, map redraws). Run our
     // upkeep at most once per 120 ms: straight away if it has been quiet, otherwise once at the end.
-    const upkeep = () => { ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); };
+    const upkeep = () => { hideUpsells(); ensureCoalitionUi(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); };
     let upkeepAt = 0, upkeepTimer = null;
     const runUpkeep = () => { upkeepTimer = null; upkeepAt = Date.now(); try { upkeep(); } catch (err) { console.warn('[ResultsDesk Plus] upkeep', err); } };
     new MutationObserver(() => {

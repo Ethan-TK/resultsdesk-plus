@@ -33,7 +33,7 @@ Your userscript manager will pick up new versions automatically.
 - **Hide the top bar.** A small arrow under the header hides it for more map; click it again to bring it back (remembered between visits).
 - **Key follows the leader.** The margin key takes the colour of the party currently leading (most seats, then most votes), blue until results arrive.
 - **Changelog.** The Help button is replaced by a Changelog listing what each version changed.
-- Removes the Buy me a coffee and Contact header links.
+- Removes the Buy me a coffee and Contact header links, the "Get PRO" button and Pro promo cards (Pro features stay Pro), and the NZ / Switzerland switch.
 
 ## Firefox
 

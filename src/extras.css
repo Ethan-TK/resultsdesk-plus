@@ -12,6 +12,12 @@ body.light-mode .app-brand .rd-brand-text { color: #0f1d33; }
 body.light-mode .app-brand .rd-brand-text b { color: #b45309; }
 @media (max-width: 660px) { .app-brand .rd-brand-text { font-size: 26px; } }
 
+/* ---------- site upsells and country switch: hidden ---------- */
+html body.dashboard-body .app-header-nav .pro-header-cta,
+html body.dashboard-body .rd-nz-country-switch,
+html body.dashboard-body [data-map-icon="area"],
+html body.dashboard-body #freeProAreaPreview { display: none !important; }
+
 /* ---------- no footer ---------- */
 body.dashboard-body .dashboard-footer { display: none !important; }
 
@@ -310,7 +316,7 @@ body.light-mode .rd-tv-coal .rd-bloc-bar i { background: #0f1d33; }
 body.light-mode .rd-tv-actions button { border-color: rgba(15, 29, 51, .25); }
 
 /* ---------- changelog (replaces Help) ---------- */
-header .nav-btn[data-nav="help"] { display: none !important; }
+header .nav-btn[data-nav="help"]:not(.legal-settings-trigger) { display: none !important; }
 .rd-cl-btn { display: inline-flex !important; align-items: center; gap: 6px; }
 .rd-cl-backdrop {
   position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 16px;

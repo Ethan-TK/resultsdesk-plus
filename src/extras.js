@@ -819,6 +819,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.9.4', ['Panning with suburbs on is lighter: electorate outlines are no longer rebuilt on every redraw. Voting place dots keep growing as you zoom in (about 2px at zoom 8, 13px at zoom 14) instead of staying one size, and are drawn in far fewer canvas steps, which also helps zooming and panning with dots on.']],
     ['2.9.3', ['Smoother panning and zooming with suburbs on: no hover work while you drag or zoom, a lighter suburbs layer on high-resolution screens, and fewer redraws while panning.', 'Voting place dots are bigger when zoomed in, and still double in size with every zoom step.']],
     ['2.9.2', ['“% counted” (on pinned electorates, an open electorate and New Zealand) now includes the special votes still to come, so it no longer says 100% while specials are outstanding.', 'Dots always show on the open electorate, even with the setting Off, and are drawn on the suburbs’ own layer so there is one less full-size layer to move and scale while zooming and panning.', 'Voting place dots are bigger, especially when zoomed in.']],
     ['2.9.1', ['Much smoother zooming: electorate outlines are thinned to what the current zoom can show (Leaflet was re-projecting about 46,000 points on every zoom step), and the full outlines come back when you are zoomed right in.', 'Voting place dots now change size with every zoom step, like the map itself.']],
@@ -2042,17 +2043,21 @@
     queueMicrotask(() => { this._rdQueued = false; if (this._map) L.Canvas.prototype._redraw.call(this); });
   }
   const outlinePath = (it, sc, o) => {                           // the electorate's outline, thinned to what a screen can show
+    const c = it._op;                                            // panning keeps the same scale and origin, so the path is reused between redraws
+    if (c && c.sc === sc && c.ox === o.x && c.oy === o.y) return c.path;
     const path = new Path2D();
+    const step = sc < 2048 * 0.5 ? 1.2 : 0.5;                    // zoomed out, skip points closer than ~1px: the clip and the stroke cost scales with them
     for (const part of it.parts) for (const ring of part.rings) {
       let lx = 0, ly = 0;
       for (let i = 0; i < ring.length; i += 2) {
         const x = ring[i] * sc - o.x, y = ring[i + 1] * sc - o.y;
         if (i === 0) path.moveTo(x, y);
-        else if (Math.abs(x - lx) >= 0.5 || Math.abs(y - ly) >= 0.5) path.lineTo(x, y); else continue;
+        else if (Math.abs(x - lx) >= step || Math.abs(y - ly) >= step) path.lineTo(x, y); else continue;
         lx = x; ly = y;
       }
       path.closePath();
     }
+    it._op = { sc, ox: o.x, oy: o.y, path };
     return path;
   };
   // Diagonal stripes for electorates that changed hands, the same look as the site's own, drawn over the areas.
@@ -2141,34 +2146,46 @@
     it._pa = { mode, live, an };
     return an;
   };
+  // Dot size grows steadily with the zoom (a bit slower than the map itself, so they stay usable zoomed out): ~2px at zoom 8, ~13px at zoom 14.
+  const dotRadius = z => Math.max(1.3, Math.min(30, 2 * Math.pow(2, (z - 8) * 0.45)));
   function drawDots() {
     const rd = localRenderer, map2 = this._map, ctx = this._ctx;
     if (!rd) return;
     const openName = openElectorateName();
-    const sc = map2.getZoomScale(map2.getZoom(), 0), o = map2.getPixelOrigin();
-    const b = this._bounds, vx0 = b.min.x - 8, vy0 = b.min.y - 8, vx1 = b.max.x + 8, vy1 = b.max.y + 8;
-    const z = map2.getZoom(), r = Math.max(2, Math.min(60, 6.5 * Math.pow(2, z - 14)));   // doubles with every zoom step, like the map
+    const z = map2.getZoom(), sc = map2.getZoomScale(z, 0), o = map2.getPixelOrigin(), r = dotRadius(z);
+    const b = this._bounds, vx0 = b.min.x - r - 3, vy0 = b.min.y - r - 3, vx1 = b.max.x + r + 3, vy1 = b.max.y + r + 3;
+    const byColour = new Map();                       // one path per colour: far fewer canvas calls than one per dot
+    const halo = new Path2D(), ring = new Path2D();
+    let any = false;
     for (const it of rd.items) {
       const bx0 = it.bb[0] * sc - o.x, bx1 = it.bb[2] * sc - o.x, by0 = it.bb[1] * sc - o.y, by1 = it.bb[3] * sc - o.y;
-      if (bx1 < vx0 || bx0 > vx1 || by1 < vy0 || by0 > vy1 || !dotsFor(it, map2.getZoom(), openName)) continue;
+      if (bx1 < vx0 || bx0 > vx1 || by1 < vy0 || by0 > vy1 || !dotsFor(it, z, openName)) continue;
       const an = placeAnalysis(it, rd.mode);
       if (!an) continue;
       for (const p of it.places) {
         const x = p.x * sc - o.x, y = p.y * sc - o.y;
         if (x < vx0 || x > vx1 || y < vy0 || y > vy1) continue;
         const row = an.rows[p.ri], lead = leaderOf(row.votes);
-        ctx.beginPath(); ctx.arc(x, y, r + 1.2, 0, 6.2832); ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fill();
-        ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fillStyle = lead.i >= 0 && row.total > 0 ? an.cols[lead.i].color : '#94a3b8'; ctx.fill();
-        ctx.lineWidth = 1.4; ctx.strokeStyle = '#fff'; ctx.stroke();
+        const col = lead.i >= 0 && row.total > 0 ? an.cols[lead.i].color : '#94a3b8';
+        let path = byColour.get(col);
+        if (!path) { path = new Path2D(); byColour.set(col, path); }
+        halo.moveTo(x + r + 1.2, y); halo.arc(x, y, r + 1.2, 0, 6.2832);
+        path.moveTo(x + r, y); path.arc(x, y, r, 0, 6.2832);
+        ring.moveTo(x + r, y); ring.arc(x, y, r, 0, 6.2832);
+        any = true;
       }
     }
+    if (!any) return;
+    ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fill(halo);
+    for (const [col, path] of byColour) { ctx.fillStyle = col; ctx.fill(path); }
+    ctx.lineWidth = Math.max(1, Math.min(2.4, r * 0.28)); ctx.strokeStyle = '#fff'; ctx.stroke(ring);
   }
   function nearestDot(latlng) {
     const rd = localRenderer;
     if (!rd) return null;
     const openName = openElectorateName(), z = map.getZoom();
     const w = map.project(latlng, 0), sc = map.getZoomScale(map.getZoom(), 0);
-    const reach = Math.max(8, Math.min(64, 6.5 * Math.pow(2, z - 14) + 4)) / sc, r2 = reach * reach;   // a bit more than the dot's size, in map units
+    const reach = (dotRadius(z) + 5) / sc, r2 = reach * reach;   // a bit more than the dot's size, in map units
     let best = null, bd = r2;
     for (const it of rd.items) {
       if (w.x < it.bb[0] - reach || w.x > it.bb[2] + reach || w.y < it.bb[1] - reach || w.y > it.bb[3] + reach || !dotsFor(it, z, openName)) continue;

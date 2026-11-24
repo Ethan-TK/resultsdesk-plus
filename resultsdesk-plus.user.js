@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      2.9.9
+// @version      2.9.11
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -896,6 +896,8 @@ for (const r of rows) if (r.style.zoom !== z) r.style.zoom = z;
 }
 window.addEventListener('resize', () => setTimeout(fitPartyRows, 100));
 const CHANGELOG = [
+['2.9.11', ['The zoom to a clicked electorate now follows the electorate you clicked rather than matching the site’s own framing, which for Auckland Central and Wellington Bays included far-off islands. Zooming to an electorate now frames the parts where people actually voted (a part needs 5% of the votes, or is needed to reach 90%), so Auckland Central is framed around the city rather than Waiheke and Great Barrier Island.']],
+['2.9.10', ['Zooming to an electorate with far-off islands (Auckland Central, Wellington Bays and others) now frames its main land instead of the whole sea-filled bounding box.']],
 ['2.9.9', ['Dot size now comes from the electorate’s land area instead of its bounding box, so electorates with far-off islands no longer get oversized dots.', 'Selecting an electorate now animates straight to the final position and zoom, instead of animating to the old position and then jumping.']],
 ['2.9.8', ['Selecting an electorate now zooms and positions the map so the electorate fills the free part of the screen next to the side panel.', 'The dots setting is now just called “Show dots”.']],
 ['2.9.7', ['The dots setting is now an on/off switch, “Voting place dots when selected”: when off, dots never show; when on, they show only on the selected electorate.']],
@@ -1359,6 +1361,13 @@ return changed;
 function widenCanvases() {
 try {
 hookElectorateFit();
+hookElectorateClicks();
+if (!map.__rdPrefetch) {
+map.__rdPrefetch = true;
+const names = features().map(f => f.live.electorate_name); let k = 0;
+const next = () => { if (k >= names.length) return; try { localFor(names[k++]); } catch { /* ignore */ } setTimeout(next, 150); };
+setTimeout(next, 3000);
+}
 if (!map.__rdFresh) {
 map.__rdFresh = true; map.on('move', keepFresh);
 for (const ev of ['viewreset', 'zoomend']) { map.on(ev, applyLod); const arr = map._events[ev]; arr.unshift(arr.pop()); }
@@ -1476,29 +1485,99 @@ function renderScore() { $('#rdScore')?.remove(); }
 let panelExpanded = false, panelFor = '';
 const META_KEY = /^(g_|electorate_|updated_at$|last_reported_at$|REPORTING$|VOTING_|ec_stats$|TOTAL$|__)/;
 const partyVotes = raw => Object.entries(raw || {}).filter(([k, v]) => typeof v === 'number' && !META_KEY.test(k));
+function coreBounds(layer) {
+if (layer.__rdCore) return layer.__rdCore;
+try {
+const name = layer.feature.properties.live.electorate_name;
+const d = localFor(name);
+if (!d || d === 'none' || d === 'loading') return null;                        // not unpacked yet: use the area-based fit this time
+const g = layer.feature.geometry;
+const polys = g.type === 'MultiPolygon' ? g.coordinates : [g.coordinates];
+const inRing = (x, y, ring) => { let ins = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) ins = !ins; } return ins; };
+const parts = polys.map(poly => ({ ring: poly[0], holes: poly.slice(1), w: 0 }));
+let total = 0;
+for (const row of d.R) {
+if (row[5] == null) continue;
+const w = row[3].reduce((a, b) => a + b, 0);
+const part = parts.find(q => inRing(row[5], row[6], q.ring) && !q.holes.some(h => inRing(row[5], row[6], h)));
+if (part) { part.w += w; total += w; }
+}
+if (!(total > 0)) return null;
+const sorted = parts.filter(q => q.w > 0).sort((a, b) => b.w - a.w);
+const keep = []; let acc = 0;
+for (const q of sorted) { if (acc < total * 0.9 || q.w >= total * 0.05) { keep.push(q); acc += q.w; } }
+if (!keep.length) return null;
+return (layer.__rdCore = L.latLngBounds(keep.flatMap(q => q.ring.map(c => [c[1], c[0]]))));
+} catch { return null; }
+}
+function mainBounds(layer) {
+if (layer.__rdMain) return layer.__rdMain;
+let result = layer.getBounds();
+try {
+const g = layer.feature.geometry;
+const polys = g.type === 'MultiPolygon' ? g.coordinates : [g.coordinates];
+const parts = polys.map(poly => {
+const ring = poly[0]; let a = 0;
+for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) a += (ring[j][0] + ring[i][0]) * (ring[j][1] - ring[i][1]);
+return { area: Math.abs(a) / 2, ring };
+});
+const biggest = Math.max(...parts.map(q => q.area));
+const keep = parts.filter(q => q.area >= biggest * 0.08);
+if (keep.length && keep.length < parts.length) result = L.latLngBounds(keep.flatMap(q => q.ring.map(c => [c[1], c[0]])));
+} catch { /* use the full bounds */ }
+return (layer.__rdMain = result);
+}
+let clickedName = null, clickedAt = 0;
+function hookElectorateClicks() {
+try {
+geoJsonLayer.eachLayer(l => {
+if (l.__rdClick) return;
+l.__rdClick = true;
+l.on('click', () => { clickedName = l.feature?.properties?.live?.electorate_name || null; clickedAt = Date.now(); });
+const arr = l._events && l._events.click;
+if (arr && arr.length > 1) arr.unshift(arr.pop());
+});
+} catch { /* layers not ready */ }
+}
+function electorateTarget(layer) {
+const b = coreBounds(layer) || mainBounds(layer);
+let opts;
+if (document.body.classList.contains('rd-clean')) {
+const mr = map.getContainer().getBoundingClientRect(), panel = $('#rdPanel'), pr = panel && panel.getBoundingClientRect();
+const left = pr && pr.width > 0 && pr.left < mr.left + mr.width * 0.5 ? Math.max(20, pr.right - mr.left + 16) : 452;
+opts = { paddingTopLeft: [left, 70], paddingBottomRight: [20, 30], maxZoom: 15 };
+} else {
+opts = { paddingTopLeft: [474, 42], paddingBottomRight: [148, 54], maxZoom: 15 };   // the site's own padding for its panel
+}
+return { bounds: b, opts };
+}
 function hookElectorateFit() {
+hookElectorateClicks();
 if (map.__rdFitHook) return;
 map.__rdFitHook = true;
-const orig = map.fitBounds;
+const clicked = () => {
+if (!clickedName || Date.now() - clickedAt > 1500 || document.body.classList.contains('rd-tv')) return null;
+let hit = null;
+geoJsonLayer.eachLayer(l => { if (!hit && l.feature?.properties?.live?.electorate_name === clickedName) hit = l; });
+return hit;
+};
+const origFit = map.fitBounds, origView = map.setView;
 map.fitBounds = function (b, o) {
 try {
-if (!document.body.classList.contains('rd-tv') && o && b) {
-const target = L.latLngBounds(b);
-let hit = false;
-geoJsonLayer.eachLayer(l => { if (!hit && l.feature?.properties?.live?.electorate_name && target.equals(l.getBounds(), 1e-6)) hit = true; });
+const hit = o && b && clicked();
+if (hit && L.latLngBounds(b).pad(0.01).intersects(hit.getBounds())) { const t = electorateTarget(hit); b = t.bounds; o = { ...o, ...t.opts }; }
+} catch { /* the site's own options */ }
+return origFit.call(this, b, o);
+};
+map.setView = function (c, z, o) {
+try {
+const hit = o && o.extraInsets && clicked();
 if (hit) {
-const mr = map.getContainer().getBoundingClientRect(), panel = $('#rdPanel');
-const pr = panel && panel.getBoundingClientRect();
-if (document.body.classList.contains('rd-clean')) {
-const left = pr && pr.width > 0 && pr.left < mr.left + mr.width * 0.5 ? Math.max(20, pr.right - mr.left + 16) : 452;
-o = { ...o, paddingTopLeft: [left, 70], paddingBottomRight: [20, 30], maxZoom: 15 };
-} else {
-o = { ...o, maxZoom: 15 };                                              // old design: keep the site's own padding for its panel
+const t = electorateTarget(hit), v = map._getBoundsCenterZoom(t.bounds, t.opts);
+return origView.call(this, v.center, v.zoom, o);
 }
-}
-}
-} catch { /* fall back to the site's own options */ }
-return orig.call(this, b, o);
+} catch { /* the site's own view */ }
+return origView.call(this, c, z, o);
 };
 }
 function selectedElectorate() {
@@ -2472,7 +2551,7 @@ window.rdExtras = { setTv, toggleCoalition, seatState, scanChanges };
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
-      console.log('[ResultsDesk Plus] active v' + '2.9.9' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      console.log('[ResultsDesk Plus] active v' + '2.9.11' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 3000) {
       setTimeout(whenReady, 30);
     } else {
@@ -2488,7 +2567,7 @@ const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
 if (!sandboxed) {
   rdPlusMain();
 } else {
-  console.log('[ResultsDesk Plus] v2.9.9 in Firefox sandbox, moving into the page…');
+  console.log('[ResultsDesk Plus] v2.9.11 in Firefox sandbox, moving into the page…');
   const s = document.createElement('script');
   s.textContent = '(' + rdPlusMain.toString() + ')();';
   (document.head || document.documentElement).appendChild(s);

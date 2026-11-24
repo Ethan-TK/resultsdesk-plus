@@ -783,3 +783,7 @@ body.rd-tv-awake .rd-tv-actions, .rd-tv-actions:hover { max-height: 4em; margin-
 @keyframes rdl-flash { 0%, 35% { background: rgba(245, 184, 61, .28); outline: 1px solid rgba(245, 184, 61, .7); } 100% { background: transparent; outline-color: transparent; } }
 
 .rd-set-val { opacity: .7; font-weight: 600; }
+
+.rd-set-val { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border: 1px solid var(--rd-panel-line, rgba(148, 163, 184, .4)); border-radius: 999px; opacity: 1; font-weight: 700; font-size: 12px; }
+.rd-set-val b { font-weight: 700; }
+button.rd-set-row:hover .rd-set-val { background: rgba(59, 130, 246, .16); border-color: #3b82f6; }

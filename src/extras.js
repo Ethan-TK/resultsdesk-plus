@@ -814,6 +814,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.9.0', ['Panning no longer shows blank edges that fill in afterwards: each map layer is re-centred while you pan as the view nears the edge of what it has drawn.', 'Voting place dots now scale with the map, and the dots setting in Settings looks like a button.', 'Faster page loading, especially in Firefox: the script no longer does its rebranding work on every one of the thousands of changes the page makes while loading.']],
     ['2.8.4', ['Settings has a Voting place dots switch that cycles Off, When zoomed and Always. When zoomed also shows the dots on the open electorate at any zoom.', 'Panning shows the map as you go instead of filling in afterwards: the map layers now draw a wider margin around the view.', 'In the Māori electorates Te Pāti Māori is shown in orange so it can’t be mistaken for Labour.', 'Smoother zooming and panning with suburbs showing: a cheaper hover and click test, cached place results, and gentler mouse-wheel zoom steps.', 'Zoom in on the suburbs and each voting place gets a dot, coloured by who won there; click a dot to see that place’s results. Clicking a suburb or a dot scrolls the left panel to that row.', 'Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off, 25 is the default) and a Light mode switch that leaves fonts and party colours alone. Help is shorter and lists what this script adds; the About and Legal parts are gone.', '“Counted tonight” now reads “Counted”.', 'TV mode uses the new design when it is on, and has a Suburbs button that shows every electorate’s suburbs on the TV map. Its buttons sit at the top of the sidebar and, like the mouse pointer, hide when the mouse is idle and come back when it moves, and the info below slides up into the space. The auto-tour now moves between areas instantly.']],
     ['2.8.3', ['“Areas” are now called “suburbs”, and the Suburbs button on the map always starts switched off (it is no longer remembered between visits). Opening an electorate still shows its suburbs.', 'Smoother zooming and panning with every electorate’s suburbs showing, especially in Firefox: they are redrawn once per zoom step instead of several times, drawn in far fewer steps, and the fine lines are left out when zoomed right out.', 'With suburbs showing, the diagonal “flipped” stripes are drawn over them so they stay clearly visible, and electorate borders use the same line style as the suburb borders instead of fading.']],
     ['2.8.2', ['Much smoother map: moving the mouse over the areas no longer redraws the whole map, the areas are built a few at a time so pressing the Areas button doesn’t freeze the page, and the area layer is lighter to move and zoom.']],
@@ -1288,24 +1289,42 @@
     const inp = sl.querySelector('input'), out = sl.querySelector('output');
     inp.addEventListener('input', () => { suburbThick = +inp.value; out.textContent = suburbThick; store.set('rd-suburb-thick', suburbThick); redrawSuburbs(); });
     sec.appendChild(sl);
-    const dr = el('button', 'rd-set-row', `<span>Voting place dots</span><span class="rd-set-val">${DOT_LABELS[dotsMode]}</span>`);
+    const dr = el('button', 'rd-set-row', `<span>Voting place dots</span><span class="rd-set-val"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg><b>${DOT_LABELS[dotsMode]}</b></span>`);
     dr.type = 'button';
-    dr.title = 'Off, only when zoomed in (or on an open electorate), or always';
+    dr.title = 'Click to change: Off, When zoomed (or on an open electorate), Always';
     dr.addEventListener('click', () => {
       dotsMode = DOT_MODES[(DOT_MODES.indexOf(dotsMode) + 1) % DOT_MODES.length];
       store.set('rd-dots', dotsMode);
-      dr.querySelector('.rd-set-val').textContent = DOT_LABELS[dotsMode];
+      dr.querySelector('.rd-set-val b').textContent = DOT_LABELS[dotsMode];
       try { if (localDots) localDots._redraw(); } catch { /* not drawn yet */ }
     });
     sec.appendChild(dr);
     sec.appendChild(row('Light mode', () => lightTheme, v => { lightTheme = v; store.set('rd-light', v); applyDesign(); }));
     body.insertBefore(sec, body.firstChild);
   }
-  // The site's own map layer draws only a thin margin around the view, so panning shows blank edges until it stops; widen it.
+  // A canvas map layer only covers a bit more than the screen, so a quick pan outruns it and shows blank edges until the pan stops.
+  // Re-centre (and redraw) a layer as soon as the view gets near the edge of what it has drawn, while the pan is still going.
+  let freshTimer = 0;
+  function keepFresh() {
+    if (freshTimer) return;
+    freshTimer = setTimeout(() => {
+      freshTimer = 0;
+      try {
+        if (map._animatingZoom) return;
+        const size = map.getSize(), tl = map.containerPointToLayerPoint([0, 0]), br = tl.add(size), m = Math.max(size.x, size.y) * 0.07;
+        for (const r of Object.values(map._layers)) {
+          if (!(r instanceof L.Canvas) || !r._bounds) continue;
+          const b = r._bounds;
+          if (tl.x - m < b.min.x || tl.y - m < b.min.y || br.x + m > b.max.x || br.y + m > b.max.y) r._update();
+        }
+      } catch { /* map busy */ }
+    }, 40);
+  }
   function widenCanvases() {
     try {
+      if (!map.__rdFresh) { map.__rdFresh = true; map.on('move', keepFresh); }
       for (const r of Object.values(map._layers)) {
-        if (r instanceof L.Canvas && !r.__rdWide) { r.__rdWide = true; if (r.options.pane !== 'rdLocal' && r.options.pane !== 'rdLocalHi' && r.options.pane !== 'rdLocalDots') { r.options.padding = 0.3; r._update(); } }
+        if (r instanceof L.Canvas && !r.__rdWide) { r.__rdWide = true; if (!/^rdLocal/.test(r.options.pane || '')) { r.options.padding = 0.2; r._update(); } }
       }
     } catch { /* map not ready */ }
   }
@@ -2068,7 +2087,7 @@
     const openName = openElectorateName();
     const sc = map2.getZoomScale(map2.getZoom(), 0), o = map2.getPixelOrigin();
     const b = this._bounds, vx0 = b.min.x - 8, vy0 = b.min.y - 8, vx1 = b.max.x + 8, vy1 = b.max.y + 8;
-    const z = map2.getZoom(), r = z >= 15 ? 5.5 : z >= 13.5 ? 4.5 : 3.8;
+    const z = map2.getZoom(), r = Math.max(1.8, Math.min(12, 3.2 * Math.pow(2, z - 13.5)));   // grows and shrinks with the map
     for (const it of rd.items) {
       const bx0 = it.bb[0] * sc - o.x, bx1 = it.bb[2] * sc - o.x, by0 = it.bb[1] * sc - o.y, by1 = it.bb[3] * sc - o.y;
       if (bx1 < vx0 || bx0 > vx1 || by1 < vy0 || by0 > vy1 || !dotsFor(it, map2.getZoom(), openName)) continue;
@@ -2089,7 +2108,7 @@
     if (!rd || dotsMode === 'off') return null;
     const openName = openElectorateName(), z = map.getZoom();
     const w = map.project(latlng, 0), sc = map.getZoomScale(map.getZoom(), 0);
-    const reach = 10 / sc, r2 = reach * reach;                 // 10 screen pixels, in map units
+    const reach = Math.max(8, Math.min(14, 3.2 * Math.pow(2, z - 13.5) + 4)) / sc, r2 = reach * reach;   // a bit more than the dot's size, in map units
     let best = null, bd = r2;
     for (const it of rd.items) {
       if (w.x < it.bb[0] - reach || w.x > it.bb[2] + reach || w.y < it.bb[1] - reach || w.y > it.bb[3] + reach || !dotsFor(it, z, openName)) continue;
@@ -2167,7 +2186,7 @@
       if (!map.getPane('rdLocalHi')) { map.createPane('rdLocalHi'); map.getPane('rdLocalHi').style.zIndex = 461; }
       map.getPane('rdLocalHi').style.pointerEvents = 'none';
       const Hi = L.Canvas.extend({ _draw: drawLocalHi, _redraw: redrawOnce });
-      localHi = new Hi({ pane: 'rdLocalHi', padding: 0.3 });
+      localHi = new Hi({ pane: 'rdLocalHi', padding: 0.2 });
       map.addLayer(localHi);
     }
     localHi.hover = found;
@@ -2245,14 +2264,14 @@
       if (!map.getPane('rdLocal')) { map.createPane('rdLocal'); map.getPane('rdLocal').style.zIndex = 460; }
       map.getPane('rdLocal').style.pointerEvents = 'none';
       const Regions = L.Canvas.extend({ _draw: drawLocal, _redraw: redrawOnce });
-      localRenderer = new Regions({ pane: 'rdLocal', padding: 0.3 });                     // a small margin: a bigger canvas just costs more to move
+      localRenderer = new Regions({ pane: 'rdLocal', padding: 0.2 });                     // a small margin: a bigger canvas just costs more to move
       map.addLayer(localRenderer);
       map.on('mousemove', onLocalMove).on('mouseout', hideLocalTip);
       try { map.options.wheelPxPerZoomLevel = 100; map.options.wheelDebounceTime = 25; } catch { /* ignore */ }
       if (!map.getPane('rdLocalDots')) { map.createPane('rdLocalDots'); map.getPane('rdLocalDots').style.zIndex = 462; }
       map.getPane('rdLocalDots').style.pointerEvents = 'none';
       const Dots = L.Canvas.extend({ _draw: drawDots, _redraw: redrawOnce });
-      localDots = new Dots({ pane: 'rdLocalDots', padding: 0.3 });
+      localDots = new Dots({ pane: 'rdLocalDots', padding: 0.2 });
       map.addLayer(localDots);
       map.getContainer().addEventListener('click', onDotClick, true);
     }
@@ -2328,13 +2347,27 @@
   }
 
   rebrandAll();
-  new MutationObserver(muts => {
-    for (const m of muts) {
-      if (m.type === 'characterData') { if (BRAND_RE.test((BRAND_RE.lastIndex = 0, m.target.nodeValue))) rebrandText(m.target.parentElement); }
-      else m.addedNodes.forEach(n => { if (n.nodeType === 1) { rebrandText(n); rebrandAttrs(n); } else if (n.nodeType === 3 && n.parentElement) rebrandText(n.parentElement); });
+  // The page changes thousands of times while it loads, so changes are queued and handled together every 80 ms.
+  const brandQueue = new Map();
+  let brandTimer = 0;
+  function flushBrand() {
+    brandTimer = 0;
+    const items = [...brandQueue]; brandQueue.clear();
+    for (const [n, kind] of items) {
+      if (!n || !n.isConnected) continue;
+      if (kind === 'c') { if (BRAND_RE.test((BRAND_RE.lastIndex = 0, n.nodeValue))) rebrandText(n.parentElement); }
+      else if (kind === 'e') { rebrandText(n); rebrandAttrs(n); }
+      else if (n.parentElement) rebrandText(n.parentElement);
     }
     rebrandTitle();
     rebrandLogo();
+  }
+  new MutationObserver(muts => {
+    for (const m of muts) {
+      if (m.type === 'characterData') brandQueue.set(m.target, 'c');
+      else m.addedNodes.forEach(n => { if (n.nodeType === 1) brandQueue.set(n, 'e'); else if (n.nodeType === 3) brandQueue.set(n, 't'); });
+    }
+    if (!brandTimer) brandTimer = setTimeout(flushBrand, 80);
   }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
 
   // ---------------------------------------------------------------------------

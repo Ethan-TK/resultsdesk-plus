@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      2.9.6
+// @version      2.9.7
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -896,6 +896,7 @@ for (const r of rows) if (r.style.zoom !== z) r.style.zoom = z;
 }
 window.addEventListener('resize', () => setTimeout(fitPartyRows, 100));
 const CHANGELOG = [
+['2.9.7', ['The dots setting is now an on/off switch, “Voting place dots when selected”: when off, dots never show; when on, they show only on the selected electorate.']],
 ['2.9.6', ['Voting place dots change size much more gently with the zoom and the electorate’s size, from 1.8px up to a maximum of 5.5px.']],
 ['2.9.5', ['No more hitches with suburbs on: the suburbs layer is now drawn a few electorates at a time (about 5 ms per slice) on a hidden canvas and swapped onto the map when finished, instead of in one 20-40 ms block.', 'Voting place dots are sized from their electorate: they grow with the electorate as you zoom, big for large rural electorates and smaller for city ones.']],
 ['2.9.4', ['Panning with suburbs on is lighter: electorate outlines are no longer rebuilt on every redraw. Voting place dots keep growing as you zoom in (about 2px at zoom 8, 13px at zoom 14) instead of staying one size, and are drawn in far fewer canvas steps, which also helps zooming and panning with dots on.']],
@@ -1273,8 +1274,7 @@ window.addEventListener('resize', updateLayoutVars);
 let cleanDesign = store.get('rd-clean', true) !== false;
 let suburbThick = Math.max(0, Math.min(100, Number(store.get('rd-suburb-thick', 25)) || 0));   // 0 = off, 100 = the full line
 let lightTheme = store.get('rd-light', false) === true;
-const DOT_MODES = ['off', 'zoom', 'always'], DOT_LABELS = { off: 'Off', zoom: 'When zoomed', always: 'Always' };
-let dotsMode = DOT_MODES.includes(store.get('rd-dots', 'off')) ? store.get('rd-dots', 'off') : 'off';
+let dotsOn = store.get('rd-dots-selected', true) !== false;          // voting place dots on the selected electorate
 function redrawSuburbs() {
 try { const r = Object.values(map._layers).find(l => l.options && l.options.pane === 'rdLocal' && l._redraw); if (r) r._redraw(); } catch { /* map not ready */ }
 }
@@ -1310,16 +1310,7 @@ const sl = el('label', 'rd-set-row rd-set-slider', `<span>Suburb line thickness<
 const inp = sl.querySelector('input'), out = sl.querySelector('output');
 inp.addEventListener('input', () => { suburbThick = +inp.value; out.textContent = suburbThick; store.set('rd-suburb-thick', suburbThick); redrawSuburbs(); });
 sec.appendChild(sl);
-const dr = el('button', 'rd-set-row', `<span>Voting place dots</span><span class="rd-set-val"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg><b>${DOT_LABELS[dotsMode]}</b></span>`);
-dr.type = 'button';
-dr.title = 'Click to change: Off, When zoomed, Always (the open electorate always shows its dots)';
-dr.addEventListener('click', () => {
-dotsMode = DOT_MODES[(DOT_MODES.indexOf(dotsMode) + 1) % DOT_MODES.length];
-store.set('rd-dots', dotsMode);
-dr.querySelector('.rd-set-val b').textContent = DOT_LABELS[dotsMode];
-try { if (localRenderer) localRenderer._redraw(); } catch { /* not drawn yet */ }
-});
-sec.appendChild(dr);
+sec.appendChild(row('Voting place dots when selected', () => dotsOn, v => { dotsOn = v; store.set('rd-dots-selected', v); try { if (localRenderer) localRenderer._redraw(); } catch { /* not drawn yet */ } }));
 sec.appendChild(row('Light mode', () => lightTheme, v => { lightTheme = v; store.set('rd-light', v); applyDesign(); }));
 body.insertBefore(sec, body.firstChild);
 }
@@ -2102,8 +2093,7 @@ for (const e of edges) { ctx.moveTo(e[0] * sc - o.x, e[1] * sc - o.y); ctx.lineT
 ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.4; ctx.stroke();
 ctx.restore();
 }
-const DOT_ZOOM = 12.5;
-const dotsFor = (it, z, openName) => dotsMode === 'always' || it.name === openName || (dotsMode === 'zoom' && z >= DOT_ZOOM);
+const dotsFor = (it, z, openName) => dotsOn && it.name === openName;
 const openElectorateName = () => { try { return selectedElectorate()?.name || null; } catch { return null; } };
 const placeAnalysis = (it, mode) => {
 const live = liveByName(it.name) || it.live;
@@ -2448,7 +2438,7 @@ window.rdExtras = { setTv, toggleCoalition, seatState, scanChanges };
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
-      console.log('[ResultsDesk Plus] active v' + '2.9.6' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      console.log('[ResultsDesk Plus] active v' + '2.9.7' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 3000) {
       setTimeout(whenReady, 30);
     } else {
@@ -2464,7 +2454,7 @@ const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
 if (!sandboxed) {
   rdPlusMain();
 } else {
-  console.log('[ResultsDesk Plus] v2.9.6 in Firefox sandbox, moving into the page…');
+  console.log('[ResultsDesk Plus] v2.9.7 in Firefox sandbox, moving into the page…');
   const s = document.createElement('script');
   s.textContent = '(' + rdPlusMain.toString() + ')();';
   (document.head || document.documentElement).appendChild(s);

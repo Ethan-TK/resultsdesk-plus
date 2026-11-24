@@ -8,9 +8,23 @@ const RAW = 'https://raw.githubusercontent.com/Ethan-TK/resultsdesk-plus/main/re
 const HOME = 'https://github.com/Ethan-TK/resultsdesk-plus';
 
 const src = f => fs.readFileSync(path.join(__dirname, 'src', f), 'utf8');
-const core = src('core.js');
-const extras = src('extras.js');
-const css = src('extras.css');
+// Size: drop whole-line comments, blank lines and indentation (nothing that could change a string), and squeeze the CSS.
+const slimJs = t => {
+  const out = [];
+  let inBlock = false;
+  for (const raw of t.split('\n')) {
+    const l = raw.trim();
+    if (inBlock) { if (l.includes('*/')) inBlock = false; continue; }
+    if (l.startsWith('/*')) { if (!l.includes('*/')) inBlock = true; continue; }
+    if (!l || l.startsWith('//')) continue;
+    out.push(l);
+  }
+  return out.join('\n');
+};
+const slimCss = t => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').replace(/ ?([{};,>]) ?/g, '$1').replace(/;}/g, '}').replace(/: /g, ':').trim();
+const core = slimJs(src('core.js'));
+const extras = slimJs(src('extras.js'));
+const css = slimCss(src('extras.css'));
 
 // ---- local results by voting place (data/2026/*.json, from tools/build_local_data.py) ----
 // The site's security policy only lets its page fetch from its own domains, so this data travels inside
@@ -18,6 +32,19 @@ const css = src('extras.css');
 const zlib = require('zlib');
 const dataDir = path.join(__dirname, 'data', '2026');
 const localData = {};
+// base85 over printable ASCII that is safe inside a double-quoted string in an inline script (no " \\ ` $ < ')
+const B85 = (() => { let a = ''; for (let c = 33; c < 127 && a.length < 85; c++) if (!'"\\`$<\''.includes(String.fromCharCode(c))) a += String.fromCharCode(c); return a; })();
+function b85(buf) {
+  let out = '';
+  for (let i = 0; i < buf.length; i += 4) {
+    let v = 0;
+    for (let k = 0; k < 4; k++) v = v * 256 + (i + k < buf.length ? buf[i + k] : 0);
+    let g = '';
+    for (let k = 0; k < 5; k++) { g = B85[v % 85] + g; v = Math.floor(v / 85); }
+    out += g;
+  }
+  return buf.length + ':' + out;
+}
 if (fs.existsSync(dataDir)) {
   for (const f of fs.readdirSync(dataDir)) {
     if (!f.endsWith('.json') || f === 'index.json') continue;
@@ -39,8 +66,18 @@ if (fs.existsSync(dataDir)) {
       const xy = d.xy && d.xy[i];
       return [loc, venue, sec, pv, cv, xy ? Math.round(xy[0] * 1e4) / 1e4 : null, xy ? Math.round(xy[1] * 1e4) / 1e4 : null];
     });
-    const compact = { n: d.name, p: d.produced, k: d.kind, P: d.parties, C: d.cands.map(c => [c.p, c.s]), R };
-    localData[f.slice(0, -5)] = zlib.deflateSync(Buffer.from(JSON.stringify(compact)), { level: 9 }).toString('base64');
+    // columns instead of rows (compresses better), coordinates as deltas of 1e-4 degrees, then raw deflate and base85
+    const meta = { N: R.length, n: d.name, p: d.produced, k: d.kind, P: d.parties, C: d.cands.map(c => [c.p, c.s]) };
+    let px = 0, py = 0;
+    const xs = [], ys = [];
+    for (const r of R) {
+      if (r[5] == null) { xs.push(''); ys.push(''); continue; }
+      const x = Math.round(r[5] * 1e4), y = Math.round(r[6] * 1e4);
+      xs.push(x - px); ys.push(y - py); px = x; py = y;
+    }
+    const txt = [JSON.stringify(meta), R.map(r => r[0]).join('\n'), R.map(r => r[1]).join('\n'), R.map(r => r[2]).join('\n'),
+      R.map(r => r[3].join(',')).join(';'), R.map(r => r[4].join(',')).join(';'), xs.join(','), ys.join(',')].join('\u0001');
+    localData[f.slice(0, -5)] = b85(zlib.deflateRawSync(Buffer.from(txt), { level: 9 }));
   }
 }
 
@@ -93,6 +130,7 @@ function rdPlusMain() {
   else document.addEventListener('DOMContentLoaded', addStyles, { once: true });
 
   // ---- local results data: ${Object.keys(localData).length} electorates, compressed (see build.js) ----
+  const RD_B85 = ${JSON.stringify(B85)};
   const RD_LOCAL_DATA = ${JSON.stringify(localData)};
 
   // ---- core: speed + map styling ----

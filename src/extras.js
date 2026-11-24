@@ -812,7 +812,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
-    ['2.8.4', ['Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off, 25 is the default) and a Light mode switch that leaves fonts and party colours alone. Help is shorter and lists what this script adds; the About and Legal parts are gone.', '“Counted tonight” now reads “Counted”.', 'TV mode uses the new design when it is on, and has a Suburbs button that shows every electorate’s suburbs on the TV map. Its buttons sit at the top of the sidebar and, like the mouse pointer, hide when the mouse is idle and come back when it moves, and the info below slides up into the space. The auto-tour now moves between areas instantly.']],
+    ['2.8.4', ['Zoom in on the suburbs and each voting place gets a dot, coloured by who won there; click a dot to see that place’s results. Dots only appear when you are very zoomed in. Clicking a suburb or a dot scrolls the left panel to that row.', 'Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off, 25 is the default) and a Light mode switch that leaves fonts and party colours alone. Help is shorter and lists what this script adds; the About and Legal parts are gone.', '“Counted tonight” now reads “Counted”.', 'TV mode uses the new design when it is on, and has a Suburbs button that shows every electorate’s suburbs on the TV map. Its buttons sit at the top of the sidebar and, like the mouse pointer, hide when the mouse is idle and come back when it moves, and the info below slides up into the space. The auto-tour now moves between areas instantly.']],
     ['2.8.3', ['“Areas” are now called “suburbs”, and the Suburbs button on the map always starts switched off (it is no longer remembered between visits). Opening an electorate still shows its suburbs.', 'Smoother zooming and panning with every electorate’s suburbs showing, especially in Firefox: they are redrawn once per zoom step instead of several times, drawn in far fewer steps, and the fine lines are left out when zoomed right out.', 'With suburbs showing, the diagonal “flipped” stripes are drawn over them so they stay clearly visible, and electorate borders use the same line style as the suburb borders instead of fading.']],
     ['2.8.2', ['Much smoother map: moving the mouse over the areas no longer redraws the whole map, the areas are built a few at a time so pressing the Areas button doesn’t freeze the page, and the area layer is lighter to move and zoom.']],
     ['2.8.1', ['The Electorates and Trends tabs now fill the whole window (no empty band at the bottom or gutters at the sides, and no page scroll).']],
@@ -1654,10 +1654,27 @@
   const slugOf = name => String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const asciiUpper = s => String(s || '').normalize('NFD').replace(/[^A-Za-z]/g, '').toUpperCase();
 
-  async function unpackLocal(b64) {
-    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
-    return JSON.parse(await new Response(stream).text());
+  async function unpackLocal(packed) {
+    const [len, s] = [+packed.slice(0, packed.indexOf(':')), packed.slice(packed.indexOf(':') + 1)];
+    const idx = {};
+    for (let i = 0; i < RD_B85.length; i++) idx[RD_B85[i]] = i;
+    const bytes = new Uint8Array(Math.ceil(len / 4) * 4);
+    for (let i = 0, o = 0; i < s.length; i += 5, o += 4) {
+      let v = 0;
+      for (let k = 0; k < 5; k++) v = v * 85 + idx[s[i + k]];
+      bytes[o] = v >>> 24; bytes[o + 1] = (v >>> 16) & 255; bytes[o + 2] = (v >>> 8) & 255; bytes[o + 3] = v & 255;
+    }
+    const stream = new Blob([bytes.subarray(0, len)]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    const [meta, loc, venue, sec, pv, cv, xs, ys] = (await new Response(stream).text()).split('\u0001');
+    const m = JSON.parse(meta), L = loc.split('\n'), V = venue.split('\n'), S = sec.split('\n');
+    const PV = pv.split(';'), CV = cv.split(';'), X = xs.split(','), Y = ys.split(',');
+    let px = 0, py = 0;
+    m.R = L.slice(0, m.N).map((l, i) => {
+      let lon = null, lat = null;
+      if (X[i] !== '') { px += +X[i]; py += +Y[i]; lon = px / 1e4; lat = py / 1e4; }
+      return [l, V[i], +S[i], PV[i].split(',').map(Number), CV[i].split(',').map(Number), lon, lat];
+    });
+    return m;
   }
   function localFor(name) {
     if (ds() !== 'EC_LIVE_2026' || typeof RD_LOCAL_DATA === 'undefined') return null;
@@ -1730,7 +1747,7 @@
       list = shown.map(p => {
         const title = p.loc ? (p.venue || p.loc) : p.venue;
         const where = p.loc && p.venue ? p.loc : '';
-        return `<div class="rdl-row" style="--c:${cols[p.i].color}" title="${esc(where)}${where ? ' · ' : ''}${p.sec === 0 ? 'advance voting' : 'election day'}">
+        return `<div class="rdl-row" data-rdk="p:${p.ri}" style="--c:${cols[p.i].color}" title="${esc(where)}${where ? ' · ' : ''}${p.sec === 0 ? 'advance voting' : 'election day'}">
           <div class="rdl-main"><span class="rdl-name">${esc(title)}<small>${fmt(p.total)}</small></span><span class="rdl-win"><i></i>${esc(cols[p.i].label)} <b>${(p.share * 100).toFixed(0)}%</b></span></div>
           ${localBarHtml(p.votes, cols, p.total)}
         </div>`;
@@ -1738,7 +1755,7 @@
       var more = places.length - LIMIT, noun = 'places';
     } else {
       const shown = localExpanded ? areas : areas.slice(0, LIMIT);
-      list = shown.map(a => `<div class="rdl-row" style="--c:${cols[a.i].color}" title="${a.places} voting place${a.places === 1 ? '' : 's'}">
+      list = shown.map(a => `<div class="rdl-row" data-rdk="a:${esc(a.name)}" style="--c:${cols[a.i].color}" title="${a.places} voting place${a.places === 1 ? '' : 's'}">
           <div class="rdl-main"><span class="rdl-name">${esc(a.name)}<small>${fmt(a.total)}</small></span><span class="rdl-win"><i></i>${esc(cols[a.i].label)} <b>${(a.share * 100).toFixed(0)}%</b></span></div>
           ${localBarHtml(a.votes, cols, a.total)}
         </div>`).join('');
@@ -1765,9 +1782,9 @@
   function localAnalysis(d, mode, live) {
     const cols = localColumns(d, mode, live);
     const n = cols.length;
-    const rows = d.R.map(([loc, venue, sec, pv, cv, x, y]) => {
+    const rows = d.R.map(([loc, venue, sec, pv, cv, x, y], ri) => {
       const votes = mode === 'partyvote' ? pv : cv;
-      return { loc, venue, sec, votes, total: votes.reduce((a, b) => a + b, 0), x, y };
+      return { loc, venue, sec, votes, total: votes.reduce((a, b) => a + b, 0), x, y, ri };
     });
     if (!(sumVotes(rows, n).reduce((a, b) => a + b, 0) > 0)) return null;
     // group voting places into areas (suburb or town); care-home and hospital teams go together
@@ -1792,7 +1809,7 @@
   let localMapOn = false;                       // the Suburbs button always starts off (an older version remembered it)
   try { localStorage.removeItem('rd-local-map'); } catch { /* no storage */ }
   const localItems = new Map();                 // electorate name -> geometry + cells, built once its data is unpacked
-  let localRenderer = null, localHi = null, localKey = '', localSyncTimer = 0;
+  let localRenderer = null, localHi = null, localDots = null, localPop = null, localKey = '', localSyncTimer = 0;
   let localHover = null, localTip = null, localMoveTimer = 0, localMoveAt = null;
 
   const electorateGeom = name => {
@@ -1858,17 +1875,18 @@
       return { rings, bb: [a, b, c, e] };
     });
     // seeds: the voting places inside this electorate (places at the same spot are one seed)
-    const seeds = [], seen = new Set();
-    for (const row of d.R) {
+    const seeds = [], seen = new Set(), places = [];
+    d.R.forEach((row, ri) => {
       const loc = row[0], lon = row[5], lat = row[6];
-      if (!loc || lon == null) continue;
+      if (!loc || lon == null) return;
       const [x, y] = worldPt(lon, lat);
-      if (!inParts(parts, x, y)) continue;
+      if (!inParts(parts, x, y)) return;
+      places.push({ x, y, ri });
       const key = Math.round(x * 4e5) + ',' + Math.round(y * 4e5);
-      if (seen.has(key)) continue;
+      if (seen.has(key)) return;
       seen.add(key);
       seeds.push({ x, y, area: loc });
-    }
+    });
     const bb = [x0, y0, x1, y1];
     const polys2 = seeds.length ? voronoiCells(seeds, bb) : [];
     const cells = polys2.map((pts, i) => {
@@ -1889,7 +1907,7 @@
     const byArea = new Map();
     for (const e of borders) { const l = byArea.get(e[4]); if (l) l.push(e); else byArea.set(e[4], [e]); }
     return {
-      name, d, bb, parts, cells, borders, byArea, live: liveByName(name), _st: null,
+      name, d, bb, parts, cells, borders, byArea, places, live: liveByName(name), _st: null,
       isFlipped() { try { return getMapDataResultStatus(liveByName(this.name) || this.live) === 'flipped'; } catch { return false; } },
       style(mode) {
         if (this._st && this._st.mode === mode) return this._st.map;
@@ -2009,6 +2027,104 @@
     ctx.restore();
   }
 
+  // Voting places: a dot on each one once zoomed in; click a dot for that place's results.
+  const DOT_ZOOM = 14;
+  const placeAnalysis = (it, mode) => localAnalysis(it.d, mode, liveByName(it.name) || it.live);
+  function drawDots() {
+    const rd = localRenderer, map2 = this._map, ctx = this._ctx;
+    if (!rd || map2.getZoom() < DOT_ZOOM) return;
+    const sc = map2.getZoomScale(map2.getZoom(), 0), o = map2.getPixelOrigin();
+    const b = this._bounds, vx0 = b.min.x - 8, vy0 = b.min.y - 8, vx1 = b.max.x + 8, vy1 = b.max.y + 8;
+    const r = map2.getZoom() >= 16 ? 3.4 : 2.6;
+    for (const it of rd.items) {
+      const bx0 = it.bb[0] * sc - o.x, bx1 = it.bb[2] * sc - o.x, by0 = it.bb[1] * sc - o.y, by1 = it.bb[3] * sc - o.y;
+      if (bx1 < vx0 || bx0 > vx1 || by1 < vy0 || by0 > vy1) continue;
+      const an = placeAnalysis(it, rd.mode);
+      if (!an) continue;
+      for (const p of it.places) {
+        const x = p.x * sc - o.x, y = p.y * sc - o.y;
+        if (x < vx0 || x > vx1 || y < vy0 || y > vy1) continue;
+        const row = an.rows[p.ri], lead = leaderOf(row.votes);
+        ctx.beginPath(); ctx.arc(x, y, r + 0.9, 0, 6.2832); ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fillStyle = lead.i >= 0 && row.total > 0 ? an.cols[lead.i].color : '#94a3b8'; ctx.fill();
+        ctx.lineWidth = 1; ctx.strokeStyle = '#fff'; ctx.stroke();
+      }
+    }
+  }
+  function nearestDot(latlng) {
+    const rd = localRenderer;
+    if (!rd || map.getZoom() < DOT_ZOOM) return null;
+    const pt = map.latLngToContainerPoint(latlng);
+    let best = null, bd = 8 * 8;
+    for (const it of rd.items) for (const p of it.places) {
+      const c = map.latLngToContainerPoint(map.unproject(L.point(p.x, p.y), 0));
+      const d2 = (c.x - pt.x) ** 2 + (c.y - pt.y) ** 2;
+      if (d2 < bd) { bd = d2; best = { it, p }; }
+    }
+    return best;
+  }
+  function placeHtml(hit) {
+    const an = placeAnalysis(hit.it, localRenderer.mode);
+    if (!an) return '';
+    // places at the very same spot (a venue with several booths) are listed together
+    const same = hit.it.places.filter(q => Math.abs(q.x - hit.p.x) < 1e-6 && Math.abs(q.y - hit.p.y) < 1e-6).map(q => an.rows[q.ri]);
+    return same.map(r => {
+      const tot = r.total || 0;
+      const top = r.votes.map((v, i) => ({ v, i })).filter(t => t.v > 0).sort((a, b) => b.v - a.v).slice(0, 5);
+      return `<div class="rdl-place"><b>${esc(r.venue || r.loc)}</b><small>${esc(r.loc || '')}${r.sec ? ' · ' + esc(r.sec) : ''}</small>
+        ${top.map(t => `<div class="rdl-prow"><i style="background:${an.cols[t.i].color}"></i><span>${esc(an.cols[t.i].label)}</span><b>${tot ? Math.round(t.v / tot * 100) : 0}%</b><em>${fmt(t.v)}</em></div>`).join('') || '<div class="rdl-prow"><span>No votes counted yet</span></div>'}
+        <small>${fmt(tot)} votes counted here</small></div>`;
+    }).join('');
+  }
+  // Scroll the left panel to the row for a clicked suburb or voting place and flash it.
+  function revealLocal(itemName, kind, key) {
+    setTimeout(() => {
+      try {
+        const sel = selectedElectorate();
+        if (!sel || sel.name !== itemName) return;
+        const view = kind === 'a' ? 'area' : 'place';
+        if (localView !== view || !localExpanded) { localView = view; store.set('rd-local-view', view); localExpanded = true; renderPanel(); decorateLocalOld(); }
+        setTimeout(() => {
+          const row = [...document.querySelectorAll('.rdl-row[data-rdk]')].find(r => r.dataset.rdk === key);
+          if (!row) return;
+          row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          row.classList.add('rdl-flash');
+          setTimeout(() => row.classList.remove('rdl-flash'), 1900);
+        }, 80);
+      } catch { /* panel not ready */ }
+    }, 350);
+  }
+  function areaAt(latlng) {
+    const rd = localRenderer;
+    if (!rd) return null;
+    const pt = map.project(latlng, 0);
+    for (const it of rd.items) {
+      if (pt.x < it.bb[0] || pt.x > it.bb[2] || pt.y < it.bb[1] || pt.y > it.bb[3] || !inParts(it.parts, pt.x, pt.y)) continue;
+      let best = Infinity, area = null;
+      for (const c of it.cells) { const d2 = (c.sx - pt.x) ** 2 + (c.sy - pt.y) ** 2; if (d2 < best) { best = d2; area = c.area; } }
+      return area ? { it, area } : null;
+    }
+    return null;
+  }
+  function onDotClick(e) {
+    if (!localRenderer) return;
+    let ll; try { ll = map.mouseEventToLatLng(e); } catch { return; }
+    if (map.getZoom() < DOT_ZOOM) {                      // a click on a suburb (not a dot): scroll the panel to it
+      if (map.getZoom() >= 9) { const a = areaAt(ll); if (a) revealLocal(a.it.name, 'a', 'a:' + a.area); }
+      return;
+    }
+    const hit = nearestDot(ll);
+    if (!hit) { const a = areaAt(ll); if (a) revealLocal(a.it.name, 'a', 'a:' + a.area); return; }
+    let sameOpen = false;
+    try { sameOpen = selectedElectorate()?.name === hit.it.name; } catch { /* none */ }
+    if (sameOpen) { e.stopPropagation(); e.preventDefault(); }
+    const html = placeHtml(hit);
+    if (!html) return;
+    const at = map.unproject(L.point(hit.p.x, hit.p.y), 0);
+    if (!localPop) localPop = L.popup({ className: 'rdl-pop', offset: [0, -6], maxWidth: 280, autoPanPadding: [60, 60] });
+    localPop.setLatLng(at).setContent(html).openOn(map);
+    revealLocal(hit.it.name, 'p', 'p:' + hit.p.ri);
+  }
   function setLocalHover(found) {
     if (!localRenderer) return;
     if (!localHi) {
@@ -2043,6 +2159,7 @@
         if (info) found = { it, area, html: (rd.items.length > 1 ? `<small>${esc(it.name)}</small><br>` : '') + info.html };
         break;
       }
+      try { map.getContainer().style.cursor = nearestDot(ll) ? 'pointer' : ''; } catch { /* ignore */ }
       if (!found) { hideLocalTip(); return; }
       if (!localHover || localHover.it !== found.it || localHover.area !== found.area) { localHover = found; setLocalHover(found); }
       if (!localTip) localTip = L.tooltip({ className: 'rdl-tip', direction: 'top', offset: [0, -4], opacity: 1 });
@@ -2055,6 +2172,8 @@
     hideLocalTip();
     if (localRenderer) { try { map.removeLayer(localRenderer); } catch { /* gone */ } localRenderer = null; }
     if (localHi) { try { map.removeLayer(localHi); } catch { /* gone */ } localHi = null; }
+    if (localDots) { try { map.removeLayer(localDots); } catch { /* gone */ } localDots = null; }
+    try { map.getContainer().removeEventListener('click', onDotClick, true); if (localPop) map.closePopup(localPop); map.getContainer().style.cursor = ''; } catch { /* no map */ }
     localKey = '';
     try { map.off('mousemove', onLocalMove).off('mouseout', hideLocalTip); } catch { /* no map */ }
   }
@@ -2093,11 +2212,18 @@
       localRenderer = new Regions({ pane: 'rdLocal', padding: 0.12 });                     // a small margin: a bigger canvas just costs more to move
       map.addLayer(localRenderer);
       map.on('mousemove', onLocalMove).on('mouseout', hideLocalTip);
+      if (!map.getPane('rdLocalDots')) { map.createPane('rdLocalDots'); map.getPane('rdLocalDots').style.zIndex = 462; }
+      map.getPane('rdLocalDots').style.pointerEvents = 'none';
+      const Dots = L.Canvas.extend({ _draw: drawDots, _redraw: redrawOnce });
+      localDots = new Dots({ pane: 'rdLocalDots', padding: 0.12 });
+      map.addLayer(localDots);
+      map.getContainer().addEventListener('click', onDotClick, true);
     }
     localRenderer.items = items; localRenderer.mode = mode;
     hideLocalTip();
     localKey = key;
     localRenderer._redraw();
+    if (localDots) localDots._redraw();
   }
 
   function toggleLocalMap() {

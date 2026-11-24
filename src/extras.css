@@ -762,3 +762,22 @@ body.rd-tv:not(.rd-tv-awake), body.rd-tv:not(.rd-tv-awake) * { cursor: none !imp
 .rd-tv-actions { max-height: 0; margin-bottom: -1.6vh; overflow: hidden; transition: opacity .25s, max-height .35s ease, margin-bottom .35s ease; }
 body.rd-tv-awake .rd-tv-actions, .rd-tv-actions:hover { max-height: 4em; margin-bottom: 0; }
 .rd-tv-panel > * { transition: transform .35s ease; }
+
+/* voting place popup */
+.rdl-pop .leaflet-popup-content-wrapper { background: var(--rd-panel-bg, #101827); color: var(--rd-panel-fg, #e5edf7); border-radius: 12px; box-shadow: 0 10px 28px rgba(0, 0, 0, .4); }
+.rdl-pop .leaflet-popup-tip { background: var(--rd-panel-bg, #101827); }
+.rdl-pop .leaflet-popup-content { margin: 11px 14px; font: 500 12.5px/1.4 var(--n-font, system-ui, sans-serif); min-width: 200px; }
+.rdl-pop a.leaflet-popup-close-button { color: var(--rd-panel-muted, #94a3b8); }
+.rdl-place + .rdl-place { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rd-panel-line, rgba(148, 163, 184, .25)); }
+.rdl-place > b { display: block; font-size: 13.5px; }
+.rdl-place small { display: block; color: var(--rd-panel-muted, #94a3b8); font-size: 11px; margin: 1px 0 6px; }
+.rdl-prow { display: grid; grid-template-columns: 10px 1fr auto auto; align-items: center; gap: 7px; padding: 1.5px 0; }
+.rdl-prow i { width: 10px; height: 10px; border-radius: 3px; }
+.rdl-prow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rdl-prow b { font-variant-numeric: tabular-nums; }
+.rdl-prow em { font-style: normal; color: var(--rd-panel-muted, #94a3b8); font-size: 11px; min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* old design: the key and pinned electorates sit at the right edge, below the side controls, not left of them */
+@media (min-width: 901px) { body:not(.rd-clean):not(.rd-tv) .rd-dock { right: 12px; } }
+.rdl-row.rdl-flash { animation: rdl-flash 1.8s ease-out; }
+@keyframes rdl-flash { 0%, 35% { background: rgba(245, 184, 61, .28); outline: 1px solid rgba(245, 184, 61, .7); } 100% { background: transparent; outline-color: transparent; } }

@@ -23,7 +23,7 @@
     [/^GREEN/i, '#098137'],
     [/^ACT\b/i, '#EE2796'], // ACT's magenta (act.org.nz)
     [/NZ FIRST|NEW ZEALAND FIRST/i, '#000000'],
-    [/M[AĀ]ORI/i, '#B2001A'],
+    [/M[AĀ]ORI/i, 'TPM'],
     [/OPPORTUNIT/i, OPP_CYAN],
     [/^ALLIANCE/i, '#33CC66'],
     [/ANIMAL JUSTICE/i, '#5C558C'],
@@ -36,7 +36,9 @@
     [/^VISION/i, '#095B7E'],
     [/WOMEN.S RIGHTS/i, '#9C27B0'],
   ];
-  const ownColour = p => { const s = String(p || ''); const hit = PARTY_COLOURS.find(([re]) => re.test(s)); return hit ? hit[1] : null; };
+  // In the Māori electorates Te Pāti Māori is drawn orange, because its red is too close to Labour's.
+  const maoriLayer = () => { try { return !!document.getElementById('maoriBtnMap')?.classList.contains('active') || (typeof currentDataset !== 'undefined' && /maori/i.test(String(currentDataset))); } catch { return false; } };
+  const ownColour = p => { const s = String(p || ''); const hit = PARTY_COLOURS.find(([re]) => re.test(s)); if (!hit) return null; return hit[1] === 'TPM' ? (maoriLayer() ? '#F28C28' : '#B2001A') : hit[1]; };
   if (typeof window.getPartyColor === 'function' && !window.getPartyColor.__rdColours) {
     const origColor = window.getPartyColor;
     window.getPartyColor = function (p) { return ownColour(p) || origColor.apply(this, arguments); };
@@ -812,7 +814,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
-    ['2.8.4', ['Zoom in on the suburbs and each voting place gets a dot, coloured by who won there; click a dot to see that place’s results. Dots only appear when you are very zoomed in. Clicking a suburb or a dot scrolls the left panel to that row.', 'Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off, 25 is the default) and a Light mode switch that leaves fonts and party colours alone. Help is shorter and lists what this script adds; the About and Legal parts are gone.', '“Counted tonight” now reads “Counted”.', 'TV mode uses the new design when it is on, and has a Suburbs button that shows every electorate’s suburbs on the TV map. Its buttons sit at the top of the sidebar and, like the mouse pointer, hide when the mouse is idle and come back when it moves, and the info below slides up into the space. The auto-tour now moves between areas instantly.']],
+    ['2.8.4', ['In the Māori electorates Te Pāti Māori is shown in orange so it can’t be mistaken for Labour.', 'Smoother zooming and panning with suburbs showing: a cheaper hover and click test, cached place results, and gentler mouse-wheel zoom steps.', 'Zoom in on the suburbs and each voting place gets a dot, coloured by who won there; click a dot to see that place’s results. Clicking a suburb or a dot scrolls the left panel to that row.', 'Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off, 25 is the default) and a Light mode switch that leaves fonts and party colours alone. Help is shorter and lists what this script adds; the About and Legal parts are gone.', '“Counted tonight” now reads “Counted”.', 'TV mode uses the new design when it is on, and has a Suburbs button that shows every electorate’s suburbs on the TV map. Its buttons sit at the top of the sidebar and, like the mouse pointer, hide when the mouse is idle and come back when it moves, and the info below slides up into the space. The auto-tour now moves between areas instantly.']],
     ['2.8.3', ['“Areas” are now called “suburbs”, and the Suburbs button on the map always starts switched off (it is no longer remembered between visits). Opening an electorate still shows its suburbs.', 'Smoother zooming and panning with every electorate’s suburbs showing, especially in Firefox: they are redrawn once per zoom step instead of several times, drawn in far fewer steps, and the fine lines are left out when zoomed right out.', 'With suburbs showing, the diagonal “flipped” stripes are drawn over them so they stay clearly visible, and electorate borders use the same line style as the suburb borders instead of fading.']],
     ['2.8.2', ['Much smoother map: moving the mouse over the areas no longer redraws the whole map, the areas are built a few at a time so pressing the Areas button doesn’t freeze the page, and the area layer is lighter to move and zoom.']],
     ['2.8.1', ['The Electorates and Trends tabs now fill the whole window (no empty band at the bottom or gutters at the sides, and no page scroll).']],
@@ -2028,14 +2030,20 @@
   }
 
   // Voting places: a dot on each one once zoomed in; click a dot for that place's results.
-  const DOT_ZOOM = 14;
-  const placeAnalysis = (it, mode) => localAnalysis(it.d, mode, liveByName(it.name) || it.live);
+  const DOT_ZOOM = 12.5;
+  const placeAnalysis = (it, mode) => {
+    const live = liveByName(it.name) || it.live;
+    if (it._pa && it._pa.mode === mode && it._pa.live === live) return it._pa.an;
+    const an = localAnalysis(it.d, mode, live);
+    it._pa = { mode, live, an };
+    return an;
+  };
   function drawDots() {
     const rd = localRenderer, map2 = this._map, ctx = this._ctx;
     if (!rd || map2.getZoom() < DOT_ZOOM) return;
     const sc = map2.getZoomScale(map2.getZoom(), 0), o = map2.getPixelOrigin();
     const b = this._bounds, vx0 = b.min.x - 8, vy0 = b.min.y - 8, vx1 = b.max.x + 8, vy1 = b.max.y + 8;
-    const r = map2.getZoom() >= 16 ? 3.4 : 2.6;
+    const z = map2.getZoom(), r = z >= 15 ? 5.5 : z >= 13.5 ? 4.5 : 3.8;
     for (const it of rd.items) {
       const bx0 = it.bb[0] * sc - o.x, bx1 = it.bb[2] * sc - o.x, by0 = it.bb[1] * sc - o.y, by1 = it.bb[3] * sc - o.y;
       if (bx1 < vx0 || bx0 > vx1 || by1 < vy0 || by0 > vy1) continue;
@@ -2045,21 +2053,24 @@
         const x = p.x * sc - o.x, y = p.y * sc - o.y;
         if (x < vx0 || x > vx1 || y < vy0 || y > vy1) continue;
         const row = an.rows[p.ri], lead = leaderOf(row.votes);
-        ctx.beginPath(); ctx.arc(x, y, r + 0.9, 0, 6.2832); ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, r + 1.2, 0, 6.2832); ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fill();
         ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fillStyle = lead.i >= 0 && row.total > 0 ? an.cols[lead.i].color : '#94a3b8'; ctx.fill();
-        ctx.lineWidth = 1; ctx.strokeStyle = '#fff'; ctx.stroke();
+        ctx.lineWidth = 1.4; ctx.strokeStyle = '#fff'; ctx.stroke();
       }
     }
   }
   function nearestDot(latlng) {
     const rd = localRenderer;
     if (!rd || map.getZoom() < DOT_ZOOM) return null;
-    const pt = map.latLngToContainerPoint(latlng);
-    let best = null, bd = 8 * 8;
-    for (const it of rd.items) for (const p of it.places) {
-      const c = map.latLngToContainerPoint(map.unproject(L.point(p.x, p.y), 0));
-      const d2 = (c.x - pt.x) ** 2 + (c.y - pt.y) ** 2;
-      if (d2 < bd) { bd = d2; best = { it, p }; }
+    const w = map.project(latlng, 0), sc = map.getZoomScale(map.getZoom(), 0);
+    const reach = 10 / sc, r2 = reach * reach;                 // 10 screen pixels, in map units
+    let best = null, bd = r2;
+    for (const it of rd.items) {
+      if (w.x < it.bb[0] - reach || w.x > it.bb[2] + reach || w.y < it.bb[1] - reach || w.y > it.bb[3] + reach) continue;
+      for (const p of it.places) {
+        const dx = p.x - w.x, dy = p.y - w.y, d2 = dx * dx + dy * dy;
+        if (d2 < bd) { bd = d2; best = { it, p }; }
+      }
     }
     return best;
   }
@@ -2212,6 +2223,7 @@
       localRenderer = new Regions({ pane: 'rdLocal', padding: 0.12 });                     // a small margin: a bigger canvas just costs more to move
       map.addLayer(localRenderer);
       map.on('mousemove', onLocalMove).on('mouseout', hideLocalTip);
+      try { map.options.wheelPxPerZoomLevel = 100; map.options.wheelDebounceTime = 25; } catch { /* ignore */ }
       if (!map.getPane('rdLocalDots')) { map.createPane('rdLocalDots'); map.getPane('rdLocalDots').style.zIndex = 462; }
       map.getPane('rdLocalDots').style.pointerEvents = 'none';
       const Dots = L.Canvas.extend({ _draw: drawDots, _redraw: redrawOnce });

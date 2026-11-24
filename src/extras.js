@@ -819,6 +819,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.9.6', ['Voting place dots change size much more gently with the zoom and the electorate’s size, from 1.8px up to a maximum of 5.5px.']],
     ['2.9.5', ['No more hitches with suburbs on: the suburbs layer is now drawn a few electorates at a time (about 5 ms per slice) on a hidden canvas and swapped onto the map when finished, instead of in one 20-40 ms block.', 'Voting place dots are sized from their electorate: they grow with the electorate as you zoom, big for large rural electorates and smaller for city ones.']],
     ['2.9.4', ['Panning with suburbs on is lighter: electorate outlines are no longer rebuilt on every redraw. Voting place dots keep growing as you zoom in (about 2px at zoom 8, 13px at zoom 14) instead of staying one size, and are drawn in far fewer canvas steps, which also helps zooming and panning with dots on.']],
     ['2.9.3', ['Smoother panning and zooming with suburbs on: no hover work while you drag or zoom, a lighter suburbs layer on high-resolution screens, and fewer redraws while panning.', 'Voting place dots are bigger when zoomed in, and still double in size with every zoom step.']],
@@ -2181,9 +2182,9 @@
     it._pa = { mode, live, an };
     return an;
   };
-  // A dot's size follows its electorate's size on screen (so it doubles with every zoom step, like the electorate does):
-  // a big rural electorate gets bigger dots than a small city one, kept between 1.5px and 22px.
-  const dotR = (it, sc) => Math.max(1.5, Math.min(22, Math.hypot(it.bb[2] - it.bb[0], it.bb[3] - it.bb[1]) * sc * 0.006));
+  // A dot's size follows its electorate's size on screen (it grows as the electorate does, but much more slowly):
+  // gently: about 1px per zoom step, from 1.8px up to 5.5px at most.
+  const dotR = (it, sc) => Math.max(1.8, Math.min(5.5, 2.2 + 1.2 * Math.log2(Math.max(1, Math.hypot(it.bb[2] - it.bb[0], it.bb[3] - it.bb[1]) * sc) / 150)));
   function drawDots() {
     const rd = this, map2 = this._map, ctx = this._ctx;
     if (!rd.items || !rd.items.length) return;

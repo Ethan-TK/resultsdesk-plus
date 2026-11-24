@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      2.9.5
+// @version      2.9.6
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -896,6 +896,7 @@ for (const r of rows) if (r.style.zoom !== z) r.style.zoom = z;
 }
 window.addEventListener('resize', () => setTimeout(fitPartyRows, 100));
 const CHANGELOG = [
+['2.9.6', ['Voting place dots change size much more gently with the zoom and the electorate’s size, from 1.8px up to a maximum of 5.5px.']],
 ['2.9.5', ['No more hitches with suburbs on: the suburbs layer is now drawn a few electorates at a time (about 5 ms per slice) on a hidden canvas and swapped onto the map when finished, instead of in one 20-40 ms block.', 'Voting place dots are sized from their electorate: they grow with the electorate as you zoom, big for large rural electorates and smaller for city ones.']],
 ['2.9.4', ['Panning with suburbs on is lighter: electorate outlines are no longer rebuilt on every redraw. Voting place dots keep growing as you zoom in (about 2px at zoom 8, 13px at zoom 14) instead of staying one size, and are drawn in far fewer canvas steps, which also helps zooming and panning with dots on.']],
 ['2.9.3', ['Smoother panning and zooming with suburbs on: no hover work while you drag or zoom, a lighter suburbs layer on high-resolution screens, and fewer redraws while panning.', 'Voting place dots are bigger when zoomed in, and still double in size with every zoom step.']],
@@ -2111,7 +2112,7 @@ const an = localAnalysis(it.d, mode, live);
 it._pa = { mode, live, an };
 return an;
 };
-const dotR = (it, sc) => Math.max(1.5, Math.min(22, Math.hypot(it.bb[2] - it.bb[0], it.bb[3] - it.bb[1]) * sc * 0.006));
+const dotR = (it, sc) => Math.max(1.8, Math.min(5.5, 2.2 + 1.2 * Math.log2(Math.max(1, Math.hypot(it.bb[2] - it.bb[0], it.bb[3] - it.bb[1]) * sc) / 150)));
 function drawDots() {
 const rd = this, map2 = this._map, ctx = this._ctx;
 if (!rd.items || !rd.items.length) return;
@@ -2447,7 +2448,7 @@ window.rdExtras = { setTv, toggleCoalition, seatState, scanChanges };
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
-      console.log('[ResultsDesk Plus] active v' + '2.9.5' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      console.log('[ResultsDesk Plus] active v' + '2.9.6' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 3000) {
       setTimeout(whenReady, 30);
     } else {
@@ -2463,7 +2464,7 @@ const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
 if (!sandboxed) {
   rdPlusMain();
 } else {
-  console.log('[ResultsDesk Plus] v2.9.5 in Firefox sandbox, moving into the page…');
+  console.log('[ResultsDesk Plus] v2.9.6 in Firefox sandbox, moving into the page…');
   const s = document.createElement('script');
   s.textContent = '(' + rdPlusMain.toString() + ')();';
   (document.head || document.documentElement).appendChild(s);

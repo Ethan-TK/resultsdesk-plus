@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = '2.9.12';
+const VERSION = '2.9.13';
 const RAW = 'https://raw.githubusercontent.com/Ethan-TK/resultsdesk-plus/main/resultsdesk-plus.user.js';
 const HOME = 'https://github.com/Ethan-TK/resultsdesk-plus';
 

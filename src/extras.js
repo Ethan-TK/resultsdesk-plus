@@ -819,6 +819,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.9.13', ['Zooming to an electorate now includes the whole electorate, islands and all (Auckland Central now includes Great Barrier Island), leaving out only pieces more than about 130 km from where people voted, such as the Chatham Islands for Wellington Bays.']],
     ['2.9.12', ['Fixed: the first click on an electorate with far-off islands (Wellington Bays, Auckland Central) zoomed to the islands and made the rest of the map disappear; only the second click framed it properly. The voting-place data used for framing is now unpacked in the background as soon as the results load, and until it is ready the site’s own framing is left alone.']],
     ['2.9.11', ['The zoom to a clicked electorate now follows the electorate you clicked rather than matching the site’s own framing, which for Auckland Central and Wellington Bays included far-off islands. Zooming to an electorate now frames the parts where people actually voted (a part needs 5% of the votes, or is needed to reach 90%), so Auckland Central is framed around the city rather than Waiheke and Great Barrier Island.']],
     ['2.9.10', ['Zooming to an electorate with far-off islands (Auckland Central, Wellington Bays and others) now frames its main land instead of the whole sea-filled bounding box.']],
@@ -1533,7 +1534,16 @@
       const keep = []; let acc = 0;
       for (const q of sorted) { if (acc < total * 0.9 || q.w >= total * 0.05) { keep.push(q); acc += q.w; } }
       if (!keep.length) return null;
-      return (layer.__rdCore = L.latLngBounds(keep.flatMap(q => q.ring.map(c => [c[1], c[0]]))));
+      // the whole electorate, except pieces more than ~1.2 degrees (about 130 km) from where people voted (the Chatham Islands, for Wellington Bays)
+      const core = L.latLngBounds(keep.flatMap(q => q.ring.map(c => [c[1], c[0]])));
+      const near = parts.filter(q => {
+        if (keep.includes(q)) return true;
+        const pb = L.latLngBounds(q.ring.map(c => [c[1], c[0]]));
+        const dLat = Math.max(0, pb.getSouth() - core.getNorth(), core.getSouth() - pb.getNorth());
+        const dLng = Math.max(0, pb.getWest() - core.getEast(), core.getWest() - pb.getEast());
+        return Math.hypot(dLat, dLng) < 1.2;
+      });
+      return (layer.__rdCore = L.latLngBounds(near.flatMap(q => q.ring.map(c => [c[1], c[0]]))));
     } catch { return null; }
   }
   function mainBounds(layer) {

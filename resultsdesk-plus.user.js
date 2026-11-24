@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      2.9.12
+// @version      2.9.13
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -896,6 +896,7 @@ for (const r of rows) if (r.style.zoom !== z) r.style.zoom = z;
 }
 window.addEventListener('resize', () => setTimeout(fitPartyRows, 100));
 const CHANGELOG = [
+['2.9.13', ['Zooming to an electorate now includes the whole electorate, islands and all (Auckland Central now includes Great Barrier Island), leaving out only pieces more than about 130 km from where people voted, such as the Chatham Islands for Wellington Bays.']],
 ['2.9.12', ['Fixed: the first click on an electorate with far-off islands (Wellington Bays, Auckland Central) zoomed to the islands and made the rest of the map disappear; only the second click framed it properly. The voting-place data used for framing is now unpacked in the background as soon as the results load, and until it is ready the site’s own framing is left alone.']],
 ['2.9.11', ['The zoom to a clicked electorate now follows the electorate you clicked rather than matching the site’s own framing, which for Auckland Central and Wellington Bays included far-off islands. Zooming to an electorate now frames the parts where people actually voted (a part needs 5% of the votes, or is needed to reach 90%), so Auckland Central is framed around the city rather than Waiheke and Great Barrier Island.']],
 ['2.9.10', ['Zooming to an electorate with far-off islands (Auckland Central, Wellington Bays and others) now frames its main land instead of the whole sea-filled bounding box.']],
@@ -1514,7 +1515,15 @@ const sorted = parts.filter(q => q.w > 0).sort((a, b) => b.w - a.w);
 const keep = []; let acc = 0;
 for (const q of sorted) { if (acc < total * 0.9 || q.w >= total * 0.05) { keep.push(q); acc += q.w; } }
 if (!keep.length) return null;
-return (layer.__rdCore = L.latLngBounds(keep.flatMap(q => q.ring.map(c => [c[1], c[0]]))));
+const core = L.latLngBounds(keep.flatMap(q => q.ring.map(c => [c[1], c[0]])));
+const near = parts.filter(q => {
+if (keep.includes(q)) return true;
+const pb = L.latLngBounds(q.ring.map(c => [c[1], c[0]]));
+const dLat = Math.max(0, pb.getSouth() - core.getNorth(), core.getSouth() - pb.getNorth());
+const dLng = Math.max(0, pb.getWest() - core.getEast(), core.getWest() - pb.getEast());
+return Math.hypot(dLat, dLng) < 1.2;
+});
+return (layer.__rdCore = L.latLngBounds(near.flatMap(q => q.ring.map(c => [c[1], c[0]]))));
 } catch { return null; }
 }
 function mainBounds(layer) {
@@ -2559,7 +2568,7 @@ window.rdExtras = { setTv, toggleCoalition, seatState, scanChanges };
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
-      console.log('[ResultsDesk Plus] active v' + '2.9.12' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      console.log('[ResultsDesk Plus] active v' + '2.9.13' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 3000) {
       setTimeout(whenReady, 30);
     } else {
@@ -2575,7 +2584,7 @@ const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
 if (!sandboxed) {
   rdPlusMain();
 } else {
-  console.log('[ResultsDesk Plus] v2.9.12 in Firefox sandbox, moving into the page…');
+  console.log('[ResultsDesk Plus] v2.9.13 in Firefox sandbox, moving into the page…');
   const s = document.createElement('script');
   s.textContent = '(' + rdPlusMain.toString() + ')();';
   (document.head || document.documentElement).appendChild(s);

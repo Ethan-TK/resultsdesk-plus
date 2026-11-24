@@ -63,10 +63,15 @@
     try { geoJsonLayer && geoJsonLayer.eachLayer(l => { const lv = l.feature?.properties?.live; if (lv?.electorate_code) out.push({ layer: l, live: lv }); }); } catch { /* map not ready */ }
     return out;
   }
+  // Voting places counted says nothing about special votes, so while they are outstanding the % counted is scaled down by them.
+  function withSpecials(pct) {
+    try { const s = specials(); if (pct != null && s && !s.counted) return pct / (1 + s.ratio); } catch { /* no national figures yet */ }
+    return pct;
+  }
   function countedPct() {
     let c = 0, t = 0;
     for (const { live } of features()) { c += Number(live.voting_places_counted || 0); t += Number(live.voting_places_total || 0); }
-    return t > 0 ? (c / t) * 100 : null;
+    return t > 0 ? withSpecials((c / t) * 100) : null;
   }
 
   // ---------------------------------------------------------------------------
@@ -690,7 +695,7 @@
     const totalVotes = Number(r && (pv ? r.party_vote_total_votes : r.total_votes)) || 0;
     const share = Number.isFinite(shareRaw) && shareRaw > 0 ? shareRaw * 100 : (totalVotes > 0 ? leadVotes / totalVotes * 100 : null);
     const total = Number(r?.voting_places_total) || 0;
-    const pct = total > 0 ? (Number(r.voting_places_counted) || 0) / total * 100 : (r ? Number(r.reporting_pct) || 0 : null);
+    const pct = withSpecials(total > 0 ? (Number(r.voting_places_counted) || 0) / total * 100 : (r ? Number(r.reporting_pct) || 0 : null));
     let flip = false;
     try { flip = has && getMapDataResultStatus(r) === 'flipped'; } catch { /* no comparison data */ }
     return `<div class="rd-pin-chip">
@@ -698,7 +703,7 @@
         <span class="rd-pin-bar${flip ? ' is-flip' : ''}" style="--c:${has ? partyColor(lead) : '#64748b'}"></span>
         <b>${esc(name)}</b>
         <span class="rd-pin-lead">${has ? `${esc(partyLabel(lead))}${share != null ? ` <span class="rd-pin-share">${share.toFixed(0)}%</span>` : ''} · +${fmt(margin)}` : 'no votes yet'}</span>
-        ${pct == null ? '' : `<span class="rd-pin-pct">${pct.toFixed(0)}% counted</span>`}
+        ${pct == null ? '' : `<span class="rd-pin-pct" title="All voting places, plus an estimate of the special votes still to count">${pct.toFixed(0)}% counted</span>`}
       </button>
       <button type="button" class="rd-pin-x" data-unpin="${esc(name)}" title="Unpin" aria-label="Unpin ${esc(name)}">×</button>
     </div>`;
@@ -814,6 +819,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.9.2', ['“% counted” (on pinned electorates, an open electorate and New Zealand) now includes the special votes still to come, so it no longer says 100% while specials are outstanding.', 'Dots always show on the open electorate, even with the setting Off, and are drawn on the suburbs’ own layer so there is one less full-size layer to move and scale while zooming and panning.', 'Voting place dots are bigger, especially when zoomed in.']],
     ['2.9.1', ['Much smoother zooming: electorate outlines are thinned to what the current zoom can show (Leaflet was re-projecting about 46,000 points on every zoom step), and the full outlines come back when you are zoomed right in.', 'Voting place dots now change size with every zoom step, like the map itself.']],
     ['2.9.0', ['Panning no longer shows blank edges that fill in afterwards: each map layer is re-centred while you pan as the view nears the edge of what it has drawn.', 'Voting place dots now scale with the map, and the dots setting in Settings looks like a button.', 'Faster page loading, especially in Firefox: the script no longer does its rebranding work on every one of the thousands of changes the page makes while loading.']],
     ['2.8.4', ['Settings has a Voting place dots switch that cycles Off, When zoomed and Always. When zoomed also shows the dots on the open electorate at any zoom.', 'Panning shows the map as you go instead of filling in afterwards: the map layers now draw a wider margin around the view.', 'In the Māori electorates Te Pāti Māori is shown in orange so it can’t be mistaken for Labour.', 'Smoother zooming and panning with suburbs showing: a cheaper hover and click test, cached place results, and gentler mouse-wheel zoom steps.', 'Zoom in on the suburbs and each voting place gets a dot, coloured by who won there; click a dot to see that place’s results. Clicking a suburb or a dot scrolls the left panel to that row.', 'Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off, 25 is the default) and a Light mode switch that leaves fonts and party colours alone. Help is shorter and lists what this script adds; the About and Legal parts are gone.', '“Counted tonight” now reads “Counted”.', 'TV mode uses the new design when it is on, and has a Suburbs button that shows every electorate’s suburbs on the TV map. Its buttons sit at the top of the sidebar and, like the mouse pointer, hide when the mouse is idle and come back when it moves, and the info below slides up into the space. The auto-tour now moves between areas instantly.']],
@@ -1292,12 +1298,12 @@
     sec.appendChild(sl);
     const dr = el('button', 'rd-set-row', `<span>Voting place dots</span><span class="rd-set-val"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg><b>${DOT_LABELS[dotsMode]}</b></span>`);
     dr.type = 'button';
-    dr.title = 'Click to change: Off, When zoomed (or on an open electorate), Always';
+    dr.title = 'Click to change: Off, When zoomed, Always (the open electorate always shows its dots)';
     dr.addEventListener('click', () => {
       dotsMode = DOT_MODES[(DOT_MODES.indexOf(dotsMode) + 1) % DOT_MODES.length];
       store.set('rd-dots', dotsMode);
       dr.querySelector('.rd-set-val b').textContent = DOT_LABELS[dotsMode];
-      try { if (localDots) localDots._redraw(); } catch { /* not drawn yet */ }
+      try { if (localRenderer) localRenderer._redraw(); } catch { /* not drawn yet */ }
     });
     sec.appendChild(dr);
     sec.appendChild(row('Light mode', () => lightTheme, v => { lightTheme = v; store.set('rd-light', v); applyDesign(); }));
@@ -1580,7 +1586,7 @@
 
     const lead = entries[0], margin = lead && entries[1] ? lead.votes - entries[1].votes : 0;
     const placesTotal = Number(live.voting_places_total) || 0;
-    const counted = placesTotal > 0 ? (Number(live.voting_places_counted) || 0) / placesTotal * 100 : Number(live.reporting_pct) || 0;
+    const counted = withSpecials(placesTotal > 0 ? (Number(live.voting_places_counted) || 0) / placesTotal * 100 : Number(live.reporting_pct) || 0);
     let status = ''; try { status = getMapDataResultStatus(live); } catch { /* no comparison data */ }
     let chip = '', headline = '';
     const done = counted >= 99.95;
@@ -1891,7 +1897,7 @@
   let localMapOn = false;                       // the Suburbs button always starts off (an older version remembered it)
   try { localStorage.removeItem('rd-local-map'); } catch { /* no storage */ }
   const localItems = new Map();                 // electorate name -> geometry + cells, built once its data is unpacked
-  let localRenderer = null, localHi = null, localDots = null, localPop = null, localKey = '', localSyncTimer = 0;
+  let localRenderer = null, localHi = null, localPop = null, localKey = '', localSyncTimer = 0;
   let localHover = null, localTip = null, localMoveTimer = 0, localMoveAt = null;
 
   const electorateGeom = name => {
@@ -2092,6 +2098,7 @@
       ctx.restore();
       ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.9; ctx.stroke(outline);                    // electorate border, same as the suburb borders
     }
+    drawDots.call(this);
   }
   // The area under the mouse is outlined on its own small canvas, so moving the mouse never redraws the whole map of areas.
   function drawLocalHi() {
@@ -2111,8 +2118,8 @@
 
   // Voting places: a dot on each one once zoomed in; click a dot for that place's results.
   const DOT_ZOOM = 12.5;
-  // Off: never. When zoomed: once zoomed in, and always on the open electorate. Always: everywhere.
-  const dotsFor = (it, z, openName) => dotsMode === 'always' || (dotsMode === 'zoom' && (z >= DOT_ZOOM || it.name === openName));
+  // The open electorate always shows its dots. On top of that: Off adds nothing, When zoomed adds every electorate once zoomed in, Always adds everywhere.
+  const dotsFor = (it, z, openName) => dotsMode === 'always' || it.name === openName || (dotsMode === 'zoom' && z >= DOT_ZOOM);
   const openElectorateName = () => { try { return selectedElectorate()?.name || null; } catch { return null; } };
   const placeAnalysis = (it, mode) => {
     const live = liveByName(it.name) || it.live;
@@ -2123,11 +2130,11 @@
   };
   function drawDots() {
     const rd = localRenderer, map2 = this._map, ctx = this._ctx;
-    if (!rd || dotsMode === 'off') return;
+    if (!rd) return;
     const openName = openElectorateName();
     const sc = map2.getZoomScale(map2.getZoom(), 0), o = map2.getPixelOrigin();
     const b = this._bounds, vx0 = b.min.x - 8, vy0 = b.min.y - 8, vx1 = b.max.x + 8, vy1 = b.max.y + 8;
-    const z = map2.getZoom(), r = Math.max(1.2, Math.min(22, 3.2 * Math.pow(2, z - 13.5)));   // doubles with every zoom step, like the map
+    const z = map2.getZoom(), r = Math.max(2, Math.min(40, 5 * Math.pow(2, z - 13.5)));   // doubles with every zoom step, like the map
     for (const it of rd.items) {
       const bx0 = it.bb[0] * sc - o.x, bx1 = it.bb[2] * sc - o.x, by0 = it.bb[1] * sc - o.y, by1 = it.bb[3] * sc - o.y;
       if (bx1 < vx0 || bx0 > vx1 || by1 < vy0 || by0 > vy1 || !dotsFor(it, map2.getZoom(), openName)) continue;
@@ -2145,10 +2152,10 @@
   }
   function nearestDot(latlng) {
     const rd = localRenderer;
-    if (!rd || dotsMode === 'off') return null;
+    if (!rd) return null;
     const openName = openElectorateName(), z = map.getZoom();
     const w = map.project(latlng, 0), sc = map.getZoomScale(map.getZoom(), 0);
-    const reach = Math.max(7, Math.min(26, 3.2 * Math.pow(2, z - 13.5) + 4)) / sc, r2 = reach * reach;   // a bit more than the dot's size, in map units
+    const reach = Math.max(8, Math.min(44, 5 * Math.pow(2, z - 13.5) + 4)) / sc, r2 = reach * reach;   // a bit more than the dot's size, in map units
     let best = null, bd = r2;
     for (const it of rd.items) {
       if (w.x < it.bb[0] - reach || w.x > it.bb[2] + reach || w.y < it.bb[1] - reach || w.y > it.bb[3] + reach || !dotsFor(it, z, openName)) continue;
@@ -2267,7 +2274,6 @@
     hideLocalTip();
     if (localRenderer) { try { map.removeLayer(localRenderer); } catch { /* gone */ } localRenderer = null; }
     if (localHi) { try { map.removeLayer(localHi); } catch { /* gone */ } localHi = null; }
-    if (localDots) { try { map.removeLayer(localDots); } catch { /* gone */ } localDots = null; }
     try { map.getContainer().removeEventListener('click', onDotClick, true); if (localPop) map.closePopup(localPop); map.getContainer().style.cursor = ''; } catch { /* no map */ }
     localKey = '';
     try { map.off('mousemove', onLocalMove).off('mouseout', hideLocalTip); } catch { /* no map */ }
@@ -2308,18 +2314,12 @@
       map.addLayer(localRenderer);
       map.on('mousemove', onLocalMove).on('mouseout', hideLocalTip);
       try { map.options.wheelPxPerZoomLevel = 100; map.options.wheelDebounceTime = 25; } catch { /* ignore */ }
-      if (!map.getPane('rdLocalDots')) { map.createPane('rdLocalDots'); map.getPane('rdLocalDots').style.zIndex = 462; }
-      map.getPane('rdLocalDots').style.pointerEvents = 'none';
-      const Dots = L.Canvas.extend({ _draw: drawDots, _redraw: redrawOnce });
-      localDots = new Dots({ pane: 'rdLocalDots', padding: 0.2 });
-      map.addLayer(localDots);
       map.getContainer().addEventListener('click', onDotClick, true);
     }
     localRenderer.items = items; localRenderer.mode = mode;
     hideLocalTip();
     localKey = key;
     localRenderer._redraw();
-    if (localDots) localDots._redraw();
   }
 
   function toggleLocalMap() {

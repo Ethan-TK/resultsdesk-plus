@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      2.9.0
+// @version      2.9.1
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -892,6 +892,7 @@ for (const r of rows) if (r.style.zoom !== z) r.style.zoom = z;
 }
 window.addEventListener('resize', () => setTimeout(fitPartyRows, 100));
 const CHANGELOG = [
+['2.9.1', ['Much smoother zooming: electorate outlines are thinned to what the current zoom can show (Leaflet was re-projecting about 46,000 points on every zoom step), and the full outlines come back when you are zoomed right in.', 'Voting place dots now change size with every zoom step, like the map itself.']],
 ['2.9.0', ['Panning no longer shows blank edges that fill in afterwards: each map layer is re-centred while you pan as the view nears the edge of what it has drawn.', 'Voting place dots now scale with the map, and the dots setting in Settings looks like a button.', 'Faster page loading, especially in Firefox: the script no longer does its rebranding work on every one of the thousands of changes the page makes while loading.']],
 ['2.8.4', ['Settings has a Voting place dots switch that cycles Off, When zoomed and Always. When zoomed also shows the dots on the open electorate at any zoom.', 'Panning shows the map as you go instead of filling in afterwards: the map layers now draw a wider margin around the view.', 'In the Māori electorates Te Pāti Māori is shown in orange so it can’t be mistaken for Labour.', 'Smoother zooming and panning with suburbs showing: a cheaper hover and click test, cached place results, and gentler mouse-wheel zoom steps.', 'Zoom in on the suburbs and each voting place gets a dot, coloured by who won there; click a dot to see that place’s results. Clicking a suburb or a dot scrolls the left panel to that row.', 'Suburb lines are shown at every zoom level again, including when zoomed right out, and the “flipped” stripes now sit under the lines instead of on top of them.', 'Settings now has a suburb line thickness slider (0 turns the lines off, 25 is the default) and a Light mode switch that leaves fonts and party colours alone. Help is shorter and lists what this script adds; the About and Legal parts are gone.', '“Counted tonight” now reads “Counted”.', 'TV mode uses the new design when it is on, and has a Suburbs button that shows every electorate’s suburbs on the TV map. Its buttons sit at the top of the sidebar and, like the mouse pointer, hide when the mouse is idle and come back when it moves, and the info below slides up into the space. The auto-tour now moves between areas instantly.']],
 ['2.8.3', ['“Areas” are now called “suburbs”, and the Suburbs button on the map always starts switched off (it is no longer remembered between visits). Opening an electorate still shows its suburbs.', 'Smoother zooming and panning with every electorate’s suburbs showing, especially in Firefox: they are redrawn once per zoom step instead of several times, drawn in far fewer steps, and the fine lines are left out when zoomed right out.', 'With suburbs showing, the diagonal “flipped” stripes are drawn over them so they stay clearly visible, and electorate borders use the same line style as the suburb borders instead of fading.']],
@@ -1329,9 +1330,44 @@ if (tl.x - m < b.min.x || tl.y - m < b.min.y || br.x + m > b.max.x || br.y + m >
 } catch { /* map busy */ }
 }, 40);
 }
+const lodInfo = new WeakMap();
+const lodLevel = z => (z >= 13 ? 99 : Math.max(5, Math.floor(z)));
+const lodRing = (ring, tol) => {
+if (ring.length < 8) return ring;
+const pts = ring.map(ll => { const q = map.project(ll, 0); q.ll = ll; return q; });
+const out = L.LineUtil.simplify(pts, tol).map(q => q.ll);
+return out.length >= 4 ? out : ring;
+};
+const lodShape = (a, tol) => (a.length && a[0].lat !== undefined ? lodRing(a, tol) : a.map(x => lodShape(x, tol)));
+function applyLod() {
+let changed = false;
+try {
+const level = lodLevel(map.getZoom());
+geoJsonLayer.eachLayer(l => {
+let c = lodInfo.get(l);
+if (!c) { c = { full: l._latlngs, set: l._latlngs, cur: 99, lv: {} }; lodInfo.set(l, c); }
+else if (l._latlngs !== c.set) { c.full = l._latlngs; c.set = l._latlngs; c.cur = 99; c.lv = {}; }   // the site replaced the shape
+if (c.cur === level) return;
+const next = level === 99 ? c.full : (c.lv[level] || (c.lv[level] = lodShape(c.full, 1.1 / Math.pow(2, level))));
+l._latlngs = next; c.set = next; c.cur = level; changed = true;
+});
+} catch { /* map or layer not ready */ }
+return changed;
+}
 function widenCanvases() {
 try {
-if (!map.__rdFresh) { map.__rdFresh = true; map.on('move', keepFresh); }
+if (!map.__rdFresh) {
+map.__rdFresh = true; map.on('move', keepFresh);
+for (const ev of ['viewreset', 'zoomend']) { map.on(ev, applyLod); const arr = map._events[ev]; arr.unshift(arr.pop()); }
+let pre = 5;                       // prepare the thinned outlines for every zoom level in the background, one level at a time
+const prep = () => {
+if (pre > 12) return;
+try { geoJsonLayer.eachLayer(l => { const c = lodInfo.get(l); if (c && !c.lv[pre]) c.lv[pre] = lodShape(c.full, 1.1 / Math.pow(2, pre)); }); } catch { /* ignore */ }
+pre++; setTimeout(prep, 200);
+};
+setTimeout(prep, 2500);
+if (applyLod()) { geoJsonLayer.eachLayer(l => { try { l._project(); } catch { /* ignore */ } }); for (const r of Object.values(map._layers)) if (r instanceof L.Canvas) { try { r._redraw(); } catch { /* ignore */ } } }
+}
 for (const r of Object.values(map._layers)) {
 if (r instanceof L.Canvas && !r.__rdWide) { r.__rdWide = true; if (!/^rdLocal/.test(r.options.pane || '')) { r.options.padding = 0.2; r._update(); } }
 }
@@ -2025,7 +2061,7 @@ if (!rd || dotsMode === 'off') return;
 const openName = openElectorateName();
 const sc = map2.getZoomScale(map2.getZoom(), 0), o = map2.getPixelOrigin();
 const b = this._bounds, vx0 = b.min.x - 8, vy0 = b.min.y - 8, vx1 = b.max.x + 8, vy1 = b.max.y + 8;
-const z = map2.getZoom(), r = Math.max(1.8, Math.min(12, 3.2 * Math.pow(2, z - 13.5)));   // grows and shrinks with the map
+const z = map2.getZoom(), r = Math.max(1.2, Math.min(22, 3.2 * Math.pow(2, z - 13.5)));   // doubles with every zoom step, like the map
 for (const it of rd.items) {
 const bx0 = it.bb[0] * sc - o.x, bx1 = it.bb[2] * sc - o.x, by0 = it.bb[1] * sc - o.y, by1 = it.bb[3] * sc - o.y;
 if (bx1 < vx0 || bx0 > vx1 || by1 < vy0 || by0 > vy1 || !dotsFor(it, map2.getZoom(), openName)) continue;
@@ -2046,7 +2082,7 @@ const rd = localRenderer;
 if (!rd || dotsMode === 'off') return null;
 const openName = openElectorateName(), z = map.getZoom();
 const w = map.project(latlng, 0), sc = map.getZoomScale(map.getZoom(), 0);
-const reach = Math.max(8, Math.min(14, 3.2 * Math.pow(2, z - 13.5) + 4)) / sc, r2 = reach * reach;   // a bit more than the dot's size, in map units
+const reach = Math.max(7, Math.min(26, 3.2 * Math.pow(2, z - 13.5) + 4)) / sc, r2 = reach * reach;   // a bit more than the dot's size, in map units
 let best = null, bd = r2;
 for (const it of rd.items) {
 if (w.x < it.bb[0] - reach || w.x > it.bb[2] + reach || w.y < it.bb[1] - reach || w.y > it.bb[3] + reach || !dotsFor(it, z, openName)) continue;
@@ -2349,7 +2385,7 @@ window.rdExtras = { setTv, toggleCoalition, seatState, scanChanges };
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
-      console.log('[ResultsDesk Plus] active v' + '2.9.0' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      console.log('[ResultsDesk Plus] active v' + '2.9.1' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 3000) {
       setTimeout(whenReady, 30);
     } else {
@@ -2365,7 +2401,7 @@ const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
 if (!sandboxed) {
   rdPlusMain();
 } else {
-  console.log('[ResultsDesk Plus] v2.9.0 in Firefox sandbox, moving into the page…');
+  console.log('[ResultsDesk Plus] v2.9.1 in Firefox sandbox, moving into the page…');
   const s = document.createElement('script');
   s.textContent = '(' + rdPlusMain.toString() + ')();';
   (document.head || document.documentElement).appendChild(s);

@@ -819,6 +819,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.9.12', ['Fixed: the first click on an electorate with far-off islands (Wellington Bays, Auckland Central) zoomed to the islands and made the rest of the map disappear; only the second click framed it properly. The voting-place data used for framing is now unpacked in the background as soon as the results load, and until it is ready the site’s own framing is left alone.']],
     ['2.9.11', ['The zoom to a clicked electorate now follows the electorate you clicked rather than matching the site’s own framing, which for Auckland Central and Wellington Bays included far-off islands. Zooming to an electorate now frames the parts where people actually voted (a part needs 5% of the votes, or is needed to reach 90%), so Auckland Central is framed around the city rather than Waiheke and Great Barrier Island.']],
     ['2.9.10', ['Zooming to an electorate with far-off islands (Auckland Central, Wellington Bays and others) now frames its main land instead of the whole sea-filled bounding box.']],
     ['2.9.9', ['Dot size now comes from the electorate’s land area instead of its bounding box, so electorates with far-off islands no longer get oversized dots.', 'Selecting an electorate now animates straight to the final position and zoom, instead of animating to the old position and then jumping.']],
@@ -1359,9 +1360,15 @@
       hookElectorateClicks();
       if (!map.__rdPrefetch) {
         map.__rdPrefetch = true;
-        const names = features().map(f => f.live.electorate_name); let k = 0;
-        const next = () => { if (k >= names.length) return; try { localFor(names[k++]); } catch { /* ignore */ } setTimeout(next, 150); };
-        setTimeout(next, 3000);
+        const start = () => {                                                         // the results may not be loaded yet: keep trying until they are
+          let names = [];
+          try { names = features().map(f => f.live.electorate_name); } catch { /* not ready */ }
+          if (!names.length) { setTimeout(start, 700); return; }
+          let k = 0;
+          const next = () => { if (k >= names.length) return; try { localFor(names[k++]); } catch { /* ignore */ } setTimeout(next, 100); };
+          next();
+        };
+        setTimeout(start, 1500);
       }
       if (!map.__rdFresh) {
         map.__rdFresh = true; map.on('move', keepFresh);
@@ -1562,7 +1569,8 @@
   }
   // Where the site wants to put the map, replaced by: the parts of the clicked electorate where people voted, filling the free screen area.
   function electorateTarget(layer) {
-    const b = coreBounds(layer) || mainBounds(layer);
+    const b = coreBounds(layer);
+    if (!b) return null;                                                              // voting place data not unpacked yet: leave the site's own framing alone
     let opts;
     if (document.body.classList.contains('rd-clean')) {
       const mr = map.getContainer().getBoundingClientRect(), panel = $('#rdPanel'), pr = panel && panel.getBoundingClientRect();
@@ -1588,7 +1596,7 @@
     map.fitBounds = function (b, o) {
       try {
         const hit = o && b && clicked();
-        if (hit && L.latLngBounds(b).pad(0.01).intersects(hit.getBounds())) { const t = electorateTarget(hit); b = t.bounds; o = { ...o, ...t.opts }; }
+        if (hit && L.latLngBounds(b).pad(0.01).intersects(hit.getBounds())) { const t = electorateTarget(hit); if (t) { b = t.bounds; o = { ...o, ...t.opts }; } }
       } catch { /* the site's own options */ }
       return origFit.call(this, b, o);
     };
@@ -1596,8 +1604,8 @@
       try {
         const hit = o && o.extraInsets && clicked();
         if (hit) {
-          const t = electorateTarget(hit), v = map._getBoundsCenterZoom(t.bounds, t.opts);
-          return origView.call(this, v.center, v.zoom, o);
+          const t = electorateTarget(hit);
+          if (t) { const v = map._getBoundsCenterZoom(t.bounds, t.opts); return origView.call(this, v.center, v.zoom, o); }
         }
       } catch { /* the site's own view */ }
       return origView.call(this, c, z, o);

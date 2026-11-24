@@ -781,3 +781,5 @@ body.rd-tv-awake .rd-tv-actions, .rd-tv-actions:hover { max-height: 4em; margin-
 @media (min-width: 901px) { body:not(.rd-clean):not(.rd-tv) .rd-dock { right: 12px; } }
 .rdl-row.rdl-flash { animation: rdl-flash 1.8s ease-out; }
 @keyframes rdl-flash { 0%, 35% { background: rgba(245, 184, 61, .28); outline: 1px solid rgba(245, 184, 61, .7); } 100% { background: transparent; outline-color: transparent; } }
+
+.rd-set-val { opacity: .7; font-weight: 600; }

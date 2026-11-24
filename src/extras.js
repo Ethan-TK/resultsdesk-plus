@@ -819,6 +819,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.9.3', ['Smoother panning and zooming with suburbs on: no hover work while you drag or zoom, a lighter suburbs layer on high-resolution screens, and fewer redraws while panning.', 'Voting place dots are bigger when zoomed in, and still double in size with every zoom step.']],
     ['2.9.2', ['“% counted” (on pinned electorates, an open electorate and New Zealand) now includes the special votes still to come, so it no longer says 100% while specials are outstanding.', 'Dots always show on the open electorate, even with the setting Off, and are drawn on the suburbs’ own layer so there is one less full-size layer to move and scale while zooming and panning.', 'Voting place dots are bigger, especially when zoomed in.']],
     ['2.9.1', ['Much smoother zooming: electorate outlines are thinned to what the current zoom can show (Leaflet was re-projecting about 46,000 points on every zoom step), and the full outlines come back when you are zoomed right in.', 'Voting place dots now change size with every zoom step, like the map itself.']],
     ['2.9.0', ['Panning no longer shows blank edges that fill in afterwards: each map layer is re-centred while you pan as the view nears the edge of what it has drawn.', 'Voting place dots now scale with the map, and the dots setting in Settings looks like a button.', 'Faster page loading, especially in Firefox: the script no longer does its rebranding work on every one of the thousands of changes the page makes while loading.']],
@@ -1318,14 +1319,14 @@
       freshTimer = 0;
       try {
         if (map._animatingZoom) return;
-        const size = map.getSize(), tl = map.containerPointToLayerPoint([0, 0]), br = tl.add(size), m = Math.max(size.x, size.y) * 0.07;
+        const size = map.getSize(), tl = map.containerPointToLayerPoint([0, 0]), br = tl.add(size), m = Math.max(size.x, size.y) * 0.03;
         for (const r of Object.values(map._layers)) {
           if (!(r instanceof L.Canvas) || !r._bounds) continue;
           const b = r._bounds;
           if (tl.x - m < b.min.x || tl.y - m < b.min.y || br.x + m > b.max.x || br.y + m > b.max.y) r._update();
         }
       } catch { /* map busy */ }
-    }, 40);
+    }, 90);
   }
   // Every zoom, Leaflet re-projects every point of every electorate outline (about 46,000), twice. That alone takes ~25 ms, more than a
   // frame, and it is most of the zoom lag. Zoomed out you can't see most of those points, so use a thinned copy of each outline for the
@@ -2023,6 +2024,18 @@
   }
 
   // Leaflet requests a redraw more than once per zoom or pan; do it once, before the browser paints.
+  // Same as Leaflet's own canvas update, but with a capped pixel density: on a 2x screen this layer would otherwise fill four times the pixels.
+  function updateLocalCanvas() {
+    if (this._map._animatingZoom && this._bounds) return;
+    L.Renderer.prototype._update.call(this);
+    const b = this._bounds, c = this._container, size = b.getSize(), ratio = Math.min(window.devicePixelRatio || 1, 1.25);
+    L.DomUtil.setPosition(c, b.min);
+    c.width = Math.round(size.x * ratio); c.height = Math.round(size.y * ratio);
+    c.style.width = size.x + 'px'; c.style.height = size.y + 'px';
+    if (ratio !== 1) this._ctx.scale(ratio, ratio);
+    this._ctx.translate(-b.min.x, -b.min.y);
+    this.fire('update');
+  }
   function redrawOnce() {
     if (this._rdQueued) return;
     this._rdQueued = true;
@@ -2134,7 +2147,7 @@
     const openName = openElectorateName();
     const sc = map2.getZoomScale(map2.getZoom(), 0), o = map2.getPixelOrigin();
     const b = this._bounds, vx0 = b.min.x - 8, vy0 = b.min.y - 8, vx1 = b.max.x + 8, vy1 = b.max.y + 8;
-    const z = map2.getZoom(), r = Math.max(2, Math.min(40, 5 * Math.pow(2, z - 13.5)));   // doubles with every zoom step, like the map
+    const z = map2.getZoom(), r = Math.max(2, Math.min(60, 6.5 * Math.pow(2, z - 14)));   // doubles with every zoom step, like the map
     for (const it of rd.items) {
       const bx0 = it.bb[0] * sc - o.x, bx1 = it.bb[2] * sc - o.x, by0 = it.bb[1] * sc - o.y, by1 = it.bb[3] * sc - o.y;
       if (bx1 < vx0 || bx0 > vx1 || by1 < vy0 || by0 > vy1 || !dotsFor(it, map2.getZoom(), openName)) continue;
@@ -2155,7 +2168,7 @@
     if (!rd) return null;
     const openName = openElectorateName(), z = map.getZoom();
     const w = map.project(latlng, 0), sc = map.getZoomScale(map.getZoom(), 0);
-    const reach = Math.max(8, Math.min(44, 5 * Math.pow(2, z - 13.5) + 4)) / sc, r2 = reach * reach;   // a bit more than the dot's size, in map units
+    const reach = Math.max(8, Math.min(64, 6.5 * Math.pow(2, z - 14) + 4)) / sc, r2 = reach * reach;   // a bit more than the dot's size, in map units
     let best = null, bd = r2;
     for (const it of rd.items) {
       if (w.x < it.bb[0] - reach || w.x > it.bb[2] + reach || w.y < it.bb[1] - reach || w.y > it.bb[3] + reach || !dotsFor(it, z, openName)) continue;
@@ -2245,6 +2258,7 @@
   }
   // The areas ignore the mouse (so they can never block a click); hover is worked out from the map's own mouse position.
   function onLocalMove(e) {
+    try { if (map._animatingZoom || map.dragging?._draggable?._moving) { if (localHover || localTip) hideLocalTip(); return; } } catch { /* ignore */ }
     localMoveAt = e.latlng;
     if (localMoveTimer) return;
     localMoveTimer = setTimeout(() => {
@@ -2309,7 +2323,7 @@
     if (!localRenderer) {
       if (!map.getPane('rdLocal')) { map.createPane('rdLocal'); map.getPane('rdLocal').style.zIndex = 460; }
       map.getPane('rdLocal').style.pointerEvents = 'none';
-      const Regions = L.Canvas.extend({ _draw: drawLocal, _redraw: redrawOnce });
+      const Regions = L.Canvas.extend({ _draw: drawLocal, _redraw: redrawOnce, _update: updateLocalCanvas });
       localRenderer = new Regions({ pane: 'rdLocal', padding: 0.2 });                     // a small margin: a bigger canvas just costs more to move
       map.addLayer(localRenderer);
       map.on('mousemove', onLocalMove).on('mouseout', hideLocalTip);

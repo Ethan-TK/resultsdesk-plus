@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      2.9.4
+// @version      2.9.5
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -896,6 +896,7 @@ for (const r of rows) if (r.style.zoom !== z) r.style.zoom = z;
 }
 window.addEventListener('resize', () => setTimeout(fitPartyRows, 100));
 const CHANGELOG = [
+['2.9.5', ['No more hitches with suburbs on: the suburbs layer is now drawn a few electorates at a time (about 5 ms per slice) on a hidden canvas and swapped onto the map when finished, instead of in one 20-40 ms block.', 'Voting place dots are sized from their electorate: they grow with the electorate as you zoom, big for large rural electorates and smaller for city ones.']],
 ['2.9.4', ['Panning with suburbs on is lighter: electorate outlines are no longer rebuilt on every redraw. Voting place dots keep growing as you zoom in (about 2px at zoom 8, 13px at zoom 14) instead of staying one size, and are drawn in far fewer canvas steps, which also helps zooming and panning with dots on.']],
 ['2.9.3', ['Smoother panning and zooming with suburbs on: no hover work while you drag or zoom, a lighter suburbs layer on high-resolution screens, and fewer redraws while panning.', 'Voting place dots are bigger when zoomed in, and still double in size with every zoom step.']],
 ['2.9.2', ['“% counted” (on pinned electorates, an open electorate and New Zealand) now includes the special votes still to come, so it no longer says 100% while specials are outstanding.', 'Dots always show on the open electorate, even with the setting Off, and are drawn on the suburbs’ own layer so there is one less full-size layer to move and scale while zooming and panning.', 'Voting place dots are bigger, especially when zoomed in.']],
@@ -1966,16 +1967,49 @@ return map2;
 },
 };
 }
+function suburbsView(r) {
+const m = r._map, pad = r.options.padding, size = m.getSize();
+const min = m.containerPointToLayerPoint(size.multiplyBy(-pad)).round();
+return { bounds: new L.Bounds(min, min.add(size.multiplyBy(1 + pad * 2)).round()), center: m.getCenter(), zoom: m.getZoom() };
+}
 function updateLocalCanvas() {
-if (this._map._animatingZoom && this._bounds) return;
-L.Renderer.prototype._update.call(this);
-const b = this._bounds, c = this._container, size = b.getSize(), ratio = Math.min(window.devicePixelRatio || 1, 1.25);
-L.DomUtil.setPosition(c, b.min);
-c.width = Math.round(size.x * ratio); c.height = Math.round(size.y * ratio);
-c.style.width = size.x + 'px'; c.style.height = size.y + 'px';
-if (ratio !== 1) this._ctx.scale(ratio, ratio);
-this._ctx.translate(-b.min.x, -b.min.y);
-this.fire('update');
+if (!this._map || (this._map._animatingZoom && this._bounds)) return;
+this._want = suburbsView(this);
+if (!this._bounds) { this._bounds = this._want.bounds; this._center = this._want.center; this._zoom = this._want.zoom; }   // Leaflet's zoom transform needs these from the start
+runLocalJob(this);
+}
+function redrawLocal() {                                  // the data changed (mode, live results, thickness, dots): draw again for the current view
+if (!this._map) return;
+if (!this._want) this._want = suburbsView(this);
+runLocalJob(this);
+}
+function runLocalJob(r) {
+const map2 = r._map, id = r._job = (r._job || 0) + 1, want = r._want, items = r.items || [];
+const ratio = Math.min(window.devicePixelRatio || 1, 1.25), size = want.bounds.getSize();
+const W = Math.round(size.x * ratio), H = Math.round(size.y * ratio);
+let buf = r._buf;                                                         // the hidden canvas is reused: allocating a new full-size one each time is slow
+if (!buf || buf.width !== W || buf.height !== H) { buf = r._buf = document.createElement('canvas'); buf.width = W; buf.height = H; }
+const bctx = buf.getContext('2d');
+bctx.setTransform(1, 0, 0, 1, 0, 0); bctx.clearRect(0, 0, W, H);
+if (ratio !== 1) bctx.scale(ratio, ratio);
+bctx.translate(-want.bounds.min.x, -want.bounds.min.y);
+const view = { _map: map2, _ctx: bctx, _bounds: want.bounds, mode: r.mode, items: [] };
+let idx = 0;
+const step = () => {
+if (id !== r._job || !r._map) return;                                   // a newer job took over, or the layer is gone
+if (map2._animatingZoom || map2.getZoom() !== want.zoom) return;        // the view changed: the next update starts a new job
+const t0 = performance.now();
+while (idx < items.length && performance.now() - t0 < 5) { view.items = [items[idx++]]; drawLocal.call(view); drawDots.call(view); }
+if (idx < items.length) { setTimeout(step, 0); return; }
+const c = r._container, ctx = r._ctx;                                   // swap the finished picture in, in one go
+r._bounds = want.bounds; r._center = want.center; r._zoom = want.zoom;
+L.DomUtil.setPosition(c, want.bounds.min);
+if (c.width !== W || c.height !== H) { c.width = W; c.height = H; c.style.width = size.x + 'px'; c.style.height = size.y + 'px'; }
+ctx.setTransform(1, 0, 0, 1, 0, 0);
+ctx.clearRect(0, 0, W, H);
+ctx.drawImage(buf, 0, 0);
+};
+step();
 }
 function redrawOnce() {
 if (this._rdQueued) return;
@@ -2052,7 +2086,6 @@ ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.9 * suburbThick / 10
 ctx.restore();
 ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 0.9; ctx.stroke(outline);                    // electorate border, same as the suburb borders
 }
-drawDots.call(this);
 }
 function drawLocalHi() {
 const h = this.hover;
@@ -2078,21 +2111,21 @@ const an = localAnalysis(it.d, mode, live);
 it._pa = { mode, live, an };
 return an;
 };
-const dotRadius = z => Math.max(1.3, Math.min(30, 2 * Math.pow(2, (z - 8) * 0.45)));
+const dotR = (it, sc) => Math.max(1.5, Math.min(22, Math.hypot(it.bb[2] - it.bb[0], it.bb[3] - it.bb[1]) * sc * 0.006));
 function drawDots() {
-const rd = localRenderer, map2 = this._map, ctx = this._ctx;
-if (!rd) return;
+const rd = this, map2 = this._map, ctx = this._ctx;
+if (!rd.items || !rd.items.length) return;
 const openName = openElectorateName();
-const z = map2.getZoom(), sc = map2.getZoomScale(z, 0), o = map2.getPixelOrigin(), r = dotRadius(z);
-const b = this._bounds, vx0 = b.min.x - r - 3, vy0 = b.min.y - r - 3, vx1 = b.max.x + r + 3, vy1 = b.max.y + r + 3;
-const byColour = new Map();                       // one path per colour: far fewer canvas calls than one per dot
-const halo = new Path2D(), ring = new Path2D();
-let any = false;
+const z = map2.getZoom(), sc = map2.getZoomScale(z, 0), o = map2.getPixelOrigin();
+const b = this._bounds;
 for (const it of rd.items) {
+const r = dotR(it, sc), vx0 = b.min.x - r - 3, vy0 = b.min.y - r - 3, vx1 = b.max.x + r + 3, vy1 = b.max.y + r + 3;
 const bx0 = it.bb[0] * sc - o.x, bx1 = it.bb[2] * sc - o.x, by0 = it.bb[1] * sc - o.y, by1 = it.bb[3] * sc - o.y;
 if (bx1 < vx0 || bx0 > vx1 || by1 < vy0 || by0 > vy1 || !dotsFor(it, z, openName)) continue;
 const an = placeAnalysis(it, rd.mode);
 if (!an) continue;
+const byColour = new Map(), halo = new Path2D(), ring = new Path2D();   // one path per colour: far fewer canvas calls than one per dot
+let any = false;
 for (const p of it.places) {
 const x = p.x * sc - o.x, y = p.y * sc - o.y;
 if (x < vx0 || x > vx1 || y < vy0 || y > vy1) continue;
@@ -2105,24 +2138,25 @@ path.moveTo(x + r, y); path.arc(x, y, r, 0, 6.2832);
 ring.moveTo(x + r, y); ring.arc(x, y, r, 0, 6.2832);
 any = true;
 }
-}
-if (!any) return;
+if (!any) continue;
 ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fill(halo);
 for (const [col, path] of byColour) { ctx.fillStyle = col; ctx.fill(path); }
 ctx.lineWidth = Math.max(1, Math.min(2.4, r * 0.28)); ctx.strokeStyle = '#fff'; ctx.stroke(ring);
+}
 }
 function nearestDot(latlng) {
 const rd = localRenderer;
 if (!rd) return null;
 const openName = openElectorateName(), z = map.getZoom();
 const w = map.project(latlng, 0), sc = map.getZoomScale(map.getZoom(), 0);
-const reach = (dotRadius(z) + 5) / sc, r2 = reach * reach;   // a bit more than the dot's size, in map units
-let best = null, bd = r2;
+const reach0 = 30 / sc;   // a bit more than the dot's size, in map units
+let best = null, bd = Infinity;
 for (const it of rd.items) {
-if (w.x < it.bb[0] - reach || w.x > it.bb[2] + reach || w.y < it.bb[1] - reach || w.y > it.bb[3] + reach || !dotsFor(it, z, openName)) continue;
+if (w.x < it.bb[0] - reach0 || w.x > it.bb[2] + reach0 || w.y < it.bb[1] - reach0 || w.y > it.bb[3] + reach0 || !dotsFor(it, z, openName)) continue;
+const reach = (dotR(it, sc) + 5) / sc, lim = reach * reach;
 for (const p of it.places) {
 const dx = p.x - w.x, dy = p.y - w.y, d2 = dx * dx + dy * dy;
-if (d2 < bd) { bd = d2; best = { it, p }; }
+if (d2 < lim && d2 < bd) { bd = d2; best = { it, p }; }
 }
 }
 return best;
@@ -2266,7 +2300,7 @@ if (key === localKey && localRenderer && map.hasLayer(localRenderer)) return;
 if (!localRenderer) {
 if (!map.getPane('rdLocal')) { map.createPane('rdLocal'); map.getPane('rdLocal').style.zIndex = 460; }
 map.getPane('rdLocal').style.pointerEvents = 'none';
-const Regions = L.Canvas.extend({ _draw: drawLocal, _redraw: redrawOnce, _update: updateLocalCanvas });
+const Regions = L.Canvas.extend({ _draw() {}, _redraw: redrawLocal, _update: updateLocalCanvas });
 localRenderer = new Regions({ pane: 'rdLocal', padding: 0.2 });                     // a small margin: a bigger canvas just costs more to move
 map.addLayer(localRenderer);
 map.on('mousemove', onLocalMove).on('mouseout', hideLocalTip);
@@ -2413,7 +2447,7 @@ window.rdExtras = { setTv, toggleCoalition, seatState, scanChanges };
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
-      console.log('[ResultsDesk Plus] active v' + '2.9.4' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      console.log('[ResultsDesk Plus] active v' + '2.9.5' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 3000) {
       setTimeout(whenReady, 30);
     } else {
@@ -2429,7 +2463,7 @@ const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
 if (!sandboxed) {
   rdPlusMain();
 } else {
-  console.log('[ResultsDesk Plus] v2.9.4 in Firefox sandbox, moving into the page…');
+  console.log('[ResultsDesk Plus] v2.9.5 in Firefox sandbox, moving into the page…');
   const s = document.createElement('script');
   s.textContent = '(' + rdPlusMain.toString() + ')();';
   (document.head || document.documentElement).appendChild(s);

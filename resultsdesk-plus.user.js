@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ResultsDesk Plus
 // @namespace    resultsdesk-plus
-// @version      2.9.7
+// @version      2.9.8
 // @description  Faster live updates, striped flipped seats, margin shading, last-changed badges, sitting MPs, coalition tracker, overhang notice and TV mode for resultsdesk.nz
 // @homepageURL  https://github.com/Ethan-TK/resultsdesk-plus
 // @supportURL   https://github.com/Ethan-TK/resultsdesk-plus/issues
@@ -896,6 +896,7 @@ for (const r of rows) if (r.style.zoom !== z) r.style.zoom = z;
 }
 window.addEventListener('resize', () => setTimeout(fitPartyRows, 100));
 const CHANGELOG = [
+['2.9.8', ['Selecting an electorate now zooms and positions the map so the electorate fills the free part of the screen next to the side panel.', 'The dots setting is now just called “Show dots”.']],
 ['2.9.7', ['The dots setting is now an on/off switch, “Voting place dots when selected”: when off, dots never show; when on, they show only on the selected electorate.']],
 ['2.9.6', ['Voting place dots change size much more gently with the zoom and the electorate’s size, from 1.8px up to a maximum of 5.5px.']],
 ['2.9.5', ['No more hitches with suburbs on: the suburbs layer is now drawn a few electorates at a time (about 5 ms per slice) on a hidden canvas and swapped onto the map when finished, instead of in one 20-40 ms block.', 'Voting place dots are sized from their electorate: they grow with the electorate as you zoom, big for large rural electorates and smaller for city ones.']],
@@ -1310,7 +1311,7 @@ const sl = el('label', 'rd-set-row rd-set-slider', `<span>Suburb line thickness<
 const inp = sl.querySelector('input'), out = sl.querySelector('output');
 inp.addEventListener('input', () => { suburbThick = +inp.value; out.textContent = suburbThick; store.set('rd-suburb-thick', suburbThick); redrawSuburbs(); });
 sec.appendChild(sl);
-sec.appendChild(row('Voting place dots when selected', () => dotsOn, v => { dotsOn = v; store.set('rd-dots-selected', v); try { if (localRenderer) localRenderer._redraw(); } catch { /* not drawn yet */ } }));
+sec.appendChild(row('Show dots', () => dotsOn, v => { dotsOn = v; store.set('rd-dots-selected', v); try { if (localRenderer) localRenderer._redraw(); } catch { /* not drawn yet */ } }));
 sec.appendChild(row('Light mode', () => lightTheme, v => { lightTheme = v; store.set('rd-light', v); applyDesign(); }));
 body.insertBefore(sec, body.firstChild);
 }
@@ -1473,6 +1474,31 @@ function renderScore() { $('#rdScore')?.remove(); }
 let panelExpanded = false, panelFor = '';
 const META_KEY = /^(g_|electorate_|updated_at$|last_reported_at$|REPORTING$|VOTING_|ec_stats$|TOTAL$|__)/;
 const partyVotes = raw => Object.entries(raw || {}).filter(([k, v]) => typeof v === 'number' && !META_KEY.test(k));
+let lastSelName = null;
+function fitElectorate(name) {
+try {
+let layer = null;
+geoJsonLayer.eachLayer(l => { if (!layer && l.feature?.properties?.live?.electorate_name === name) layer = l; });
+if (!layer) return;
+const mr = map.getContainer().getBoundingClientRect();
+const panel = $('#rdPanel') || $('#mapDetailPanel');
+const pr = panel ? panel.getBoundingClientRect() : null;
+const left = pr && pr.width > 0 && pr.left < mr.left + mr.width * 0.5 ? Math.max(20, pr.right - mr.left + 16) : 20;
+const rail = document.body.classList.contains('rd-clean') ? 20 : 84;               // the old design has side controls on the right
+const opts = { paddingTopLeft: [left, 70], paddingBottomRight: [rail, 30], maxZoom: 15, animate: false };
+map.stop();
+map.fitBounds(layer.getBounds(), opts);
+} catch { /* map not ready */ }
+}
+function watchSelection() {
+let n = null;
+try { n = selectedElectorate()?.name || null; } catch { /* none */ }
+if (n === lastSelName) return;
+lastSelName = n;
+if (!n || document.body.classList.contains('rd-tv')) return;
+setTimeout(() => { if (lastSelName === n) fitElectorate(n); }, 500);
+setTimeout(() => { if (lastSelName === n) fitElectorate(n); }, 1500);    // once more after the site's own move has finished
+}
 function selectedElectorate() {
 const p = $('#mapDetailPanel');
 if (!p || !p.classList.contains('has-result')) return null;
@@ -2415,7 +2441,7 @@ try { if (Array.isArray(lastSeatSummaryRows) && lastSeatSummaryRows.length) rend
 ensureResetViewBtn();
 designToggle();
 hideUpsells();
-const upkeep = () => { decorateLocalOld(); syncLocalMap(); hideUpsells(); ensureCoalitionUi(); ensureAreasBtn(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); };
+const upkeep = () => { watchSelection(); decorateLocalOld(); syncLocalMap(); hideUpsells(); ensureCoalitionUi(); ensureAreasBtn(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); };
 let upkeepAt = 0, upkeepTimer = null;
 const runUpkeep = () => { upkeepTimer = null; upkeepAt = Date.now(); try { upkeep(); } catch (err) { console.warn('[ResultsDesk Plus] upkeep', err); } };
 new MutationObserver(() => {
@@ -2438,7 +2464,7 @@ window.rdExtras = { setTv, toggleCoalition, seatState, scanChanges };
       try { rdInstallCore(); } catch (e) { console.warn('[ResultsDesk Plus] core', e); }
       try { rdInstallExtras(); } catch (e) { console.warn('[ResultsDesk Plus] extras', e); }
       document.documentElement.dataset.rdPlus = 'active';
-      console.log('[ResultsDesk Plus] active v' + '2.9.7' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
+      console.log('[ResultsDesk Plus] active v' + '2.9.8' + ' · window ' + innerWidth + 'x' + innerHeight + (innerWidth < 901 ? ' (stacked layout: full-window map changes need 901px+)' : ''));
     } else if (++tries < 3000) {
       setTimeout(whenReady, 30);
     } else {
@@ -2454,7 +2480,7 @@ const sandboxed = typeof window.wrappedJSObject !== 'undefined' ||
 if (!sandboxed) {
   rdPlusMain();
 } else {
-  console.log('[ResultsDesk Plus] v2.9.7 in Firefox sandbox, moving into the page…');
+  console.log('[ResultsDesk Plus] v2.9.8 in Firefox sandbox, moving into the page…');
   const s = document.createElement('script');
   s.textContent = '(' + rdPlusMain.toString() + ')();';
   (document.head || document.documentElement).appendChild(s);

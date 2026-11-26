@@ -787,3 +787,24 @@ body.rd-tv-awake .rd-tv-actions, .rd-tv-actions:hover { max-height: 4em; margin-
 .rd-set-val { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border: 1px solid var(--rd-panel-line, rgba(148, 163, 184, .4)); border-radius: 999px; opacity: 1; font-weight: 700; font-size: 12px; }
 .rd-set-val b { font-weight: 700; }
 button.rd-set-row:hover .rd-set-val { background: rgba(59, 130, 246, .16); border-color: #3b82f6; }
+
+/* ---------- phones ---------- */
+@media (max-width: 900px) {
+  /* New design and TV mode are for big screens */
+  html body.dashboard-body .app-header-nav .rd-design-btn, html body.dashboard-body .app-header-nav .rd-tv-btn, html body .rd-header-toggle, html body.dashboard-body .rd-country-menu { display: none !important; }
+  /* header: icons only, so it never wraps or crowds the logo */
+  .app-header-nav { gap: 2px !important; }
+  .app-header-nav .nav-btn > span:not(.rd-switch) { font-size: 0 !important; }
+  .app-header-nav .rd-cl-btn { min-width: 40px; justify-content: center; }
+  /* the Suburbs button on the control strip */
+  #mobileMapQuickControls .mobile-map-picker-btn.is-active { background: rgba(245, 184, 61, .16); }
+  /* dialogs and popups fit the screen */
+  .legal-settings-dialog, #legalSettingsDialog { max-width: calc(100vw - 16px) !important; }
+  .rdl-pop .leaflet-popup-content { min-width: 0; max-width: 240px; }
+  .rd-set-row { padding: 13px 0; }
+  .rd-set-slider input { height: 28px; }
+  /* easier to hit */
+  .rdl-more, .rdl-seg button { min-height: 36px; }
+  .rd-pin-chip { max-width: calc(100vw - 24px); }
+  .rd-dock { max-width: calc(100vw - 80px); }
+}

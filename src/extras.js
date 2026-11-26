@@ -819,6 +819,7 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.10.0', ['Phone layout: the map controls strip gets a Suburbs button (replacing the locked Pro “Area” one), the header drops the controls that don’t apply to a phone (New design, TV mode) and the overlapping arrow, the national view and the zoom to an electorate leave the results sheet clear, and voting place dots are easier to tap.']],
     ['2.9.13', ['Zooming to an electorate now includes the whole electorate, islands and all (Auckland Central now includes Great Barrier Island), leaving out only pieces more than about 130 km from where people voted, such as the Chatham Islands for Wellington Bays.']],
     ['2.9.12', ['Fixed: the first click on an electorate with far-off islands (Wellington Bays, Auckland Central) zoomed to the islands and made the rest of the map disappear; only the second click framed it properly. The voting-place data used for framing is now unpacked in the background as soon as the results load, and until it is ready the site’s own framing is left alone.']],
     ['2.9.11', ['The zoom to a clicked electorate now follows the electorate you clicked rather than matching the site’s own framing, which for Auckland Central and Wellington Bays included far-off islands. Zooming to an electorate now frames the parts where people actually voted (a part needs 5% of the votes, or is needed to reach 90%), so Auckland Central is framed around the city rather than Waiheke and Great Barrier Island.']],
@@ -910,10 +911,41 @@
   // Only hides them; nothing Pro is unlocked. The site's promo opens a modal dialog, so its
   // open() is made a no-op rather than just hidden (a hidden modal would still block the page).
   // ---------------------------------------------------------------------------
+  const isPhone = () => window.matchMedia('(max-width: 900px)').matches;
+  // On a phone the results sheet slides up over the bottom of the map: how much of the map's height it covers right now.
+  const sheetCover = () => {
+    try {
+      if (!isPhone()) return 0;
+      const sheet = $('#mapDetailPanel'), m = map.getContainer().getBoundingClientRect();
+      const r = sheet && sheet.getBoundingClientRect();
+      if (!r || r.width === 0 || r.top <= m.top + m.height * 0.25) return 0;
+      return Math.max(0, m.bottom - r.top);
+    } catch { return 0; }
+  };
   const hideHard = n => { if (n && n.style.display !== 'none') n.style.setProperty('display', 'none', 'important'); };
   let promoPatched = false, previewObserved = false;
+  // On a phone the map controls are a strip of buttons on the right. The locked Pro "Area" slot becomes our Suburbs button.
+  function mobileSuburbsButton() {
+    const slot = $('#mobileMapQuickControls [data-picker="area"]');
+    if (!slot) return;
+    const btn = slot.querySelector('.mobile-map-picker-btn');
+    if (!btn) return;
+    if (!btn.__rdSuburbs) {
+      btn.__rdSuburbs = true;
+      btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); toggleLocalMap(); mobileSuburbsButton(); }, true);
+    }
+    if (btn.dataset.rdLabel !== '1' || !btn.querySelector('.mobile-map-picker-value')?.textContent.includes('Suburbs')) {
+      btn.dataset.rdLabel = '1';
+      btn.setAttribute('aria-label', 'Show all suburbs on map');
+      btn.innerHTML = ICON.areas.replace('<svg ', '<svg width="20" height="20" ') + '<span class="mobile-map-picker-value">Suburbs</span>';
+    }
+    btn.classList.toggle('is-active', localMapOn);
+    btn.setAttribute('aria-pressed', String(localMapOn));
+    if (btn.style.color !== (localMapOn ? 'rgb(245, 184, 61)' : '')) btn.style.color = localMapOn ? '#f5b83d' : '';
+  }
   function hideUpsells() {
     document.querySelectorAll('.pro-header-cta, [data-pro-promo-trigger="header"], .rd-nz-country-switch, [data-map-icon="area"]').forEach(hideHard);
+    mobileSuburbsButton();
     const promo = window.ResultsDeskProPromo;
     if (promo && !promoPatched) {
       promoPatched = true;
@@ -1013,6 +1045,7 @@
       const rail = visibleRect($('#mapMagicWallControlsRail'));
       if (rail && rail.right > m.left + m.width / 2) right = Math.max(right, m.right - rail.left + gap);
       if (left + right > m.width - 120) { left = gap; right = gap; } // too narrow to dodge them; just fit
+      const bottomCover = sheetCover();                                  // phone: the results sheet covers the bottom of the map
       // The key and overhang notice are obstacles (each on its own). Pinned chips are ignored:
       // they may sit over land rather than shrink the map.
       const items = $('#rdDock') ? [...$('#rdDock').querySelectorAll(':scope > .rd-overhang, :scope > .rd-legend')] : [];
@@ -1021,14 +1054,14 @@
         .map(d => ({ l: d.left - m.left - gap, t: d.top - m.top - gap, r: d.right - m.left + gap, b: d.bottom - m.top + gap }));
       const box = boxes.length ? boxes : null;
 
-      const key = [m.width, m.height, gap, left, right, boxes.map(b => [b.l, b.t, b.r, b.b].map(Math.round).join(',')).join(';')].join('|');
+      const key = [m.width, m.height, gap, left, right, Math.round(bottomCover), boxes.map(b => [b.l, b.t, b.r, b.b].map(Math.round).join(',')).join(';')].join('|');
       if (bestCache.key === key && bestCache.view) return bestCache.view;
 
       // Fit the actual coastline (falls back to the NZ box before the shapes load) into the free
       // area. For each zoom from the largest down, try placing NZ at several spots within the
       // spare room (centred first) and take the first that keeps land off the key/notice.
       const W = m.width, H = m.height;
-      const free = { l: left, r: W - right, t: gap, b: H - gap };
+      const free = { l: left, r: W - right, t: gap, b: H - gap - bottomCover };
       const fw = free.r - free.l, fh = free.b - free.t;
       if (fw < 60 || fh < 60) return null;
       let pts = landPoints();
@@ -1582,7 +1615,9 @@
     const b = coreBounds(layer);
     if (!b) return null;                                                              // voting place data not unpacked yet: leave the site's own framing alone
     let opts;
-    if (document.body.classList.contains('rd-clean')) {
+    if (isPhone()) {
+      opts = { paddingTopLeft: [14, 64], paddingBottomRight: [64, sheetCover() + 16], maxZoom: 15 };   // above the results sheet, clear of the control strip
+    } else if (document.body.classList.contains('rd-clean')) {
       const mr = map.getContainer().getBoundingClientRect(), panel = $('#rdPanel'), pr = panel && panel.getBoundingClientRect();
       const left = pr && pr.width > 0 && pr.left < mr.left + mr.width * 0.5 ? Math.max(20, pr.right - mr.left + 16) : 452;
       opts = { paddingTopLeft: [left, 70], paddingBottomRight: [20, 30], maxZoom: 15 };
@@ -2358,7 +2393,7 @@
     let best = null, bd = Infinity;
     for (const it of rd.items) {
       if (w.x < it.bb[0] - reach0 || w.x > it.bb[2] + reach0 || w.y < it.bb[1] - reach0 || w.y > it.bb[3] + reach0 || !dotsFor(it, z, openName)) continue;
-      const reach = (dotR(it, sc) + 5) / sc, lim = reach * reach;
+      const reach = (dotR(it, sc) + (matchMedia('(pointer: coarse)').matches ? 16 : 5)) / sc, lim = reach * reach;
       for (const p of it.places) {
         const dx = p.x - w.x, dy = p.y - w.y, d2 = dx * dx + dy * dy;
         if (d2 < lim && d2 < bd) { bd = d2; best = { it, p }; }

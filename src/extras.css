@@ -808,3 +808,25 @@ button.rd-set-row:hover .rd-set-val { background: rgba(59, 130, 246, .16); borde
   .rd-pin-chip { max-width: calc(100vw - 24px); }
   .rd-dock { max-width: calc(100vw - 80px); }
 }
+
+/* ---------- touch screens ---------- */
+@media (pointer: coarse) {
+  html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }   /* no pull-to-refresh while dragging the map or the sheet */
+  button, a, [role="button"], .map-icon-button, .mobile-map-picker-btn, .dashboard-view-tab { touch-action: manipulation; }   /* no 300 ms tap delay */
+  .leaflet-container { -webkit-tap-highlight-color: transparent; }
+  .leaflet-tooltip.rdl-tip { max-width: 70vw; white-space: normal; font-size: 13px; }
+}
+
+.rdl-taptip { position: absolute; z-index: 1200; transform: translate(-50%, -100%); max-width: min(260px, 72vw); padding: 7px 10px; border-radius: 9px; pointer-events: none;
+  background: var(--rd-panel-bg, #101827); color: var(--rd-panel-fg, #e5edf7); border: 1px solid var(--rd-panel-line, rgba(148, 163, 184, .3)); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); font: 600 12.5px/1.35 system-ui, sans-serif; }
+.rdl-taptip[hidden] { display: none; }
+.rdl-taptip small { opacity: .7; font-weight: 600; }
+
+/* phones: the key and pinned chips sit just above the results sheet */
+@media (max-width: 900px) {
+  html body .rd-dock { top: auto !important; bottom: calc(var(--rd-sheet-cover, 0px) + 10px) !important; left: 8px !important; right: auto !important;
+    flex-direction: column !important; align-items: flex-start !important; max-width: calc(100vw - 76px) !important; transition: bottom .2s ease; }
+  html body .rd-legend { padding: 4px 8px; font-size: 11px; }
+  html body .rd-legend small { margin-right: 4px; }
+  html body .rd-pin-chip { font-size: 12px; }
+}

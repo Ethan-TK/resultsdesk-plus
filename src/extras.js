@@ -819,6 +819,8 @@
   // 15. Changelog replaces the Help button in the header.
   // ---------------------------------------------------------------------------
   const CHANGELOG = [
+    ['2.10.2', ['Phone: the Margin key (and pinned electorates) now sit just above the results sheet and move with it as you drag it, instead of covering the top of the map.']],
+    ['2.10.1', ['Better on phones such as the Galaxy A54: tapping a suburb shows its details (there is no hover on a touch screen), pull-to-refresh no longer fires while you drag the map or the results sheet, taps respond instantly, Samsung Internet’s forced dark mode no longer recolours the page, the browser bar matches the header, dots are a little bigger for fingers, and a phone held sideways keeps the old layout instead of the desktop design.']],
     ['2.10.0', ['Phone layout: the map controls strip gets a Suburbs button (replacing the locked Pro “Area” one), the header drops the controls that don’t apply to a phone (New design, TV mode) and the overlapping arrow, the national view and the zoom to an electorate leave the results sheet clear, and voting place dots are easier to tap.']],
     ['2.9.13', ['Zooming to an electorate now includes the whole electorate, islands and all (Auckland Central now includes Great Barrier Island), leaving out only pieces more than about 130 km from where people voted, such as the Chatham Islands for Wellington Bays.']],
     ['2.9.12', ['Fixed: the first click on an electorate with far-off islands (Wellington Bays, Auckland Central) zoomed to the islands and made the rest of the map disappear; only the second click framed it properly. The voting-place data used for framing is now unpacked in the background as soon as the results load, and until it is ready the site’s own framing is left alone.']],
@@ -911,12 +913,12 @@
   // Only hides them; nothing Pro is unlocked. The site's promo opens a modal dialog, so its
   // open() is made a no-op rather than just hidden (a hidden modal would still block the page).
   // ---------------------------------------------------------------------------
-  const isPhone = () => window.matchMedia('(max-width: 900px)').matches;
+  const isPhone = () => window.matchMedia('(max-width: 900px), (max-height: 520px) and (pointer: coarse)').matches;
   // On a phone the results sheet slides up over the bottom of the map: how much of the map's height it covers right now.
   const sheetCover = () => {
     try {
       if (!isPhone()) return 0;
-      const sheet = $('#mapDetailPanel'), m = map.getContainer().getBoundingClientRect();
+      const sheet = $('#mapDetailPanel .map-detail-sheet-handle') || $('#mapDetailPanel'), m = map.getContainer().getBoundingClientRect();   // the handle is the sheet's visible top edge
       const r = sheet && sheet.getBoundingClientRect();
       if (!r || r.width === 0 || r.top <= m.top + m.height * 0.25) return 0;
       return Math.max(0, m.bottom - r.top);
@@ -1427,7 +1429,9 @@
     widenCanvases();
     if (body.classList.contains('rd-light') !== lightTheme) body.classList.toggle('rd-light', lightTheme);   // the site's own dark-mode class stays, so fonts and party colours don't change
     settingsExtras();
-    if (body.classList.contains('rd-clean') !== cleanDesign) body.classList.toggle('rd-clean', cleanDesign);
+    const wantClean = cleanDesign && !window.matchMedia('(max-height: 520px) and (pointer: coarse)').matches;   // sideways phones keep the old layout
+    if (body.classList.contains('rd-clean') !== wantClean) body.classList.toggle('rd-clean', wantClean);
+    try { document.documentElement.style.colorScheme = lightTheme ? 'light' : 'dark'; let tc = document.querySelector('meta[name="theme-color"]'); if (!tc && document.head) { tc = document.createElement('meta'); tc.name = 'theme-color'; document.head.appendChild(tc); } if (tc) tc.content = lightTheme ? '#ffffff' : '#0b1220'; } catch { /* old browser */ }   // stops Samsung Internet's forced dark mode recolouring the page
     const desktop = window.matchMedia('(min-width: 901px)').matches;
     const tabs = $('.dashboard-view-tabs'), inner = $('.app-header-inner'), shell = $('.dashboard-shell');
     if (tabs && inner && shell) {
@@ -1479,7 +1483,7 @@
   // All three are drawn from the site's data; the site's own panel and rail stay in the
   // page (hidden) so its logic, and the old design, keep working.
   // ---------------------------------------------------------------------------
-  const newUi = () => cleanDesign && window.matchMedia('(min-width: 901px)').matches && !document.body.classList.contains('rd-tv');
+  const newUi = () => cleanDesign && window.matchMedia('(min-width: 901px)').matches && !window.matchMedia('(max-height: 520px) and (pointer: coarse)').matches && !document.body.classList.contains('rd-tv');
   const setHtml = (node, html) => { if (node && node.__rdHtml !== html) { node.__rdHtml = html; node.innerHTML = html; } };
   const viewMode = () => { try { return currentViewMode === 'partyvote' ? 'partyvote' : 'electorate'; } catch { return 'electorate'; } };
   const uiColor = p => { const c = partyColor(p); return /^#0{3}(0{3})?$/.test(String(c)) && !document.body.classList.contains('rd-light') ? '#5d6370' : c; };
@@ -2351,7 +2355,7 @@
     for (const part of it.parts) { const r = part.rings[0]; let a = 0; for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) a += (r[j] + r[i]) * (r[j + 1] - r[i + 1]); area += Math.abs(a) / 2; }
     return (it._sz = Math.max(1e-9, Math.sqrt(area) * 1.6));
   };
-  const dotR = (it, sc) => Math.max(1.8, Math.min(5.5, 2.2 + 1.2 * Math.log2(Math.max(1, electorateSize(it) * sc) / 150)));
+  const dotR = (it, sc) => (matchMedia('(pointer: coarse)').matches ? 1.25 : 1) * Math.max(1.8, Math.min(5.5, 2.2 + 1.2 * Math.log2(Math.max(1, electorateSize(it) * sc) / 150)));
   function drawDots() {
     const rd = this, map2 = this._map, ctx = this._ctx;
     if (!rd.items || !rd.items.length) return;
@@ -2444,12 +2448,31 @@
     }
     return null;
   }
+  let tapTipTimer = 0;
+  function tapInfo(ll) {                                   // touch screens have no hover: a tap shows the suburb's details for a few seconds
+    const rd = localRenderer, a = areaAt(ll);
+    if (!rd || !a) return;
+    const info = a.it.style(rd.mode).get(a.area);
+    if (!info) return;
+    const html = (rd.items.length > 1 ? `<small>${esc(a.it.name)}</small><br>` : '') + info.html;
+    localHover = { it: a.it, area: a.area, html };
+    setLocalHover(localHover);
+    // a plain element on top of the map (not a Leaflet tooltip, which the map's own events can close straight away)
+    let tip = map.getContainer().querySelector('.rdl-taptip');
+    if (!tip) { tip = document.createElement('div'); tip.className = 'rdl-taptip'; map.getContainer().appendChild(tip); }
+    tip.innerHTML = html;
+    const pt = map.latLngToContainerPoint(ll), w = map.getSize().x;
+    tip.style.left = Math.max(8, Math.min(w - 8, pt.x)) + 'px'; tip.style.top = Math.max(60, pt.y - 14) + 'px';
+    tip.hidden = false;
+    clearTimeout(tapTipTimer);
+    tapTipTimer = setTimeout(() => { tip.hidden = true; if (localHover) { localHover = null; setLocalHover(null); } }, 4500);
+  }
   function onDotClick(e) {
     if (!localRenderer) return;
     let ll; try { ll = map.mouseEventToLatLng(e); } catch { return; }
     const hit = nearestDot(ll);
     if (!hit) {                                          // a click on a suburb (not a dot): scroll the panel to it
-      if (map.getZoom() >= 9) { const a = areaAt(ll); if (a) revealLocal(a.it.name, 'a', 'a:' + a.area); }
+      if (map.getZoom() >= 9) { const a = areaAt(ll); if (a) { revealLocal(a.it.name, 'a', 'a:' + a.area); if (matchMedia('(pointer: coarse)').matches) tapInfo(ll); } }
       return;
     }
     let sameOpen = false;
@@ -2689,6 +2712,10 @@
     // The site changes the page many times a second (animated numbers, map redraws). Run our
     // upkeep at most once per 120 ms: straight away if it has been quiet, otherwise once at the end.
     const upkeep = () => { decorateLocalOld(); syncLocalMap(); hideUpsells(); ensureCoalitionUi(); ensureAreasBtn(); ensureResetViewBtn(); tvButton(); changelogButton(); designToggle(); renderNewUi(); buildLegend(); decorateHeldBy(); decorateSpecials(); decoratePinButtons(); headerToggle(); expandPartyList(); fitPartyRows(); tvDetailCloseButton(); };
+    // Phone: the key and pinned chips ride just above the results sheet, wherever it has been dragged to.
+    setInterval(() => {
+      try { if (!isPhone()) return; document.documentElement.style.setProperty('--rd-sheet-cover', Math.round(sheetCover()) + 'px'); } catch { /* map not ready */ }
+    }, 300);
     let upkeepAt = 0, upkeepTimer = null;
     const runUpkeep = () => { upkeepTimer = null; upkeepAt = Date.now(); try { upkeep(); } catch (err) { console.warn('[ResultsDesk Plus] upkeep', err); } };
     new MutationObserver(() => {
